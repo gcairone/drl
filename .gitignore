@@ -1,0 +1,59 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Logs and temp files
+*.log
+*.tmp
+*.out
+
+# Data files (trajectories, datasets, saved npz/h5)
+*.npz
+*.h5
+*.pickle
+*.pkl
+
+# MuJoCo binaries / local assets (se presenti)
+mjkey.txt
+*.mjb
+*.mjc
+*.mjp
+*.mjbak
+
+# System files
+.DS_Store
+Thumbs.db
+
+# IDE/editor specific
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Coverage reports
+htmlcov/
+.coverage
+
+# Python test cache
+.pytest_cache/
+
+# Compiled extensions
+*.so
+*.dylib
+*.dll
+
+# Videos / render outputs
+*.mp4
+*.avi
+*.mov
+*.gif
