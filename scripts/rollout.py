@@ -1,11 +1,22 @@
-# replay.py
+from typing import Dict, Any
 import argparse
 import numpy as np
 from envs.humanoid_env import HumanoidEnv
-from agents.policy import NullPolicy, RandomPolicy
+from agents.policy import BasePolicy, RandomPolicy
 
 
-def run_rollout(env, policy, max_steps=1000):
+def run_rollout(env: HumanoidEnv, policy: BasePolicy, max_steps: int = 1000) -> Dict[str, np.ndarray]:
+    """
+    Executes a simulation rollout using the given policy.
+
+    Args:
+        env (HumanoidEnv): The environment instance.
+        policy (BasePolicy): The policy to use for action selection.
+        max_steps (int): Maximum number of steps to simulate.
+
+    Returns:
+        Dict[str, np.ndarray]: A dictionary containing the trajectory data (qpos, qvel, actions, rewards).
+    """
     obs = env.reset()
     trajectory = {
         "qpos": [],
@@ -26,20 +37,20 @@ def run_rollout(env, policy, max_steps=1000):
         if done:
             obs = env.reset()
 
-    # converte in array numpy
+    # Convert lists to numpy arrays
     for k in trajectory:
         trajectory[k] = np.array(trajectory[k])
 
     return trajectory
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=str, default="data/humanoid_rollout.npz")
     parser.add_argument("--steps", type=int, default=1000)
     args = parser.parse_args()
 
     env = HumanoidEnv(render=False)
-    policy = RandomPolicy(env.action_dim)  # sostituire con policy reale
+    policy = RandomPolicy(env.action_dim)  # Replace with real policy when available
 
     traj = run_rollout(env, policy, max_steps=args.steps)
     np.savez(args.output, **traj)

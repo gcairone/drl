@@ -1,4 +1,4 @@
-# envs/humanoid_env_renderer.py
+from typing import Tuple, Optional, Dict, Any
 import os
 import mujoco
 import mujoco.viewer
@@ -6,13 +6,13 @@ import numpy as np
 
 class HumanoidEnv:
     """
-    Wrapper custom per MuJoCo Humanoid.
-    Non dipende da Gym.
-    Usa Renderer + RenderContext per rendering passo-passo controllabile.
+    Custom wrapper for MuJoCo Humanoid environment.
+    Does not depend on Gymnasium.
+    Uses Renderer + RenderContext for controllable step-by-step rendering.
     """
 
-    def __init__(self, model_path=None, render=False, seed=None):
-        # Percorso modello XML
+    def __init__(self, model_path: Optional[str] = None, render: bool = False, seed: Optional[int] = None) -> None:
+        # XML model path
         if model_path is None:
             model_path = os.path.join(
                 os.path.dirname(__file__),
@@ -22,28 +22,43 @@ class HumanoidEnv:
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Humanoid XML file not found: {model_path}")
 
-        # Carica modello e dati
+        # Load model and data
         self.model = mujoco.MjModel.from_xml_path(model_path)
         self.data = mujoco.MjData(self.model)
 
-        # Dimensioni observation/action
+        # Observation/Action dimensions
         self.obs_dim = self.model.nq + self.model.nv
         self.action_dim = self.model.nu
 
         # Random seed
         self.rng = np.random.default_rng(seed)
 
-        self._viewer_ctx = None  # per viewer passive
+        self._viewer_ctx = None  # for passive viewer
 
     # -------------------
-    # Metodi simulazione
+    # Simulation Methods
     # -------------------
-    def reset(self):
+    def reset(self) -> np.ndarray:
+        """
+        Resets the environment to the initial state.
+        
+        Returns:
+            np.ndarray: Initial observation.
+        """
         mujoco.mj_resetData(self.model, self.data)
         mujoco.mj_forward(self.model, self.data)
         return self._get_obs()
 
-    def step(self, action):
+    def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
+        """
+        Advances the simulation by one step.
+        
+        Args:
+            action (np.ndarray): Action to apply.
+            
+        Returns:
+            Tuple[np.ndarray, float, bool, Dict[str, Any]]: Observation, reward, done flag, info dict.
+        """
         action = np.asarray(action, dtype=np.float32)
         action = np.clip(action, -1.0, 1.0)
         self.data.ctrl[:] = action
@@ -54,42 +69,48 @@ class HumanoidEnv:
         info = {}
         return obs, reward, done, info
 
-    def _get_obs(self):
+    def _get_obs(self) -> np.ndarray:
         return np.concatenate([self.data.qpos, self.data.qvel]).astype(np.float32)
 
-    def _compute_reward(self):
-        return float(self.data.qvel[0])  # velocità torso in avanti
+    def _compute_reward(self) -> float:
+        return float(self.data.qvel[0])  # Forward torso velocity
 
-    def _is_done(self):
-        return self.data.qpos[2] < 0.2  # humanoid caduto
+    def _is_done(self) -> bool:
+        return self.data.qpos[2] < 0.2  # Humanoid fell
 
-    def _set_state(self, qpos, qvel):
-        """Imposta qpos e qvel senza fare simulazione fisica aggiuntiva."""
+    def _set_state(self, qpos: np.ndarray, qvel: np.ndarray) -> None:
+        """
+        Sets qpos and qvel without advancing the physical simulation.
+        """
         self.data.qpos[:] = qpos
         self.data.qvel[:] = qvel
         mujoco.mj_forward(self.model, self.data)
 
 
-    def render_init_passive(self):
+    def render_init_passive(self) -> Any:
         """
-        Inizializza il viewer in modalità passive (non-blocking) per replay fedele.
-        Restituisce il viewer handle.
+        Initializes the viewer in passive mode (non-blocking) for faithful replay.
+        
+        Returns:
+            Any: The viewer handle.
         """
         if self._viewer_ctx is None:
             self._viewer_ctx = mujoco.viewer.launch_passive(self.model, self.data)
         return self._viewer_ctx
 
-    def render_sync(self, state_only=True):
+    def render_sync(self, state_only: bool = True) -> None:
         """
-        Aggiorna il viewer. 
-        state_only=True -> solo stato, senza avanzare la fisica.
+        Updates the viewer.
+        
+        Args:
+            state_only (bool): If True, updates only the state without advancing physics.
         """
         if self._viewer_ctx is not None and self._viewer_ctx.is_running():
             self._viewer_ctx.sync(state_only=state_only)
 
-    def render_close(self):
+    def render_close(self) -> None:
         """
-        Chiude il viewer.
+        Closes the viewer.
         """
         if self._viewer_ctx is not None:
             self._viewer_ctx.close()
