@@ -7,53 +7,31 @@ Includes a custom environment, basic agents, and utilities for training, rollout
 
 ## Project Structure
 
-```
+The project is organized into modular components:
 
-drl_humanoid/
-│
-├── assets/
-│   └── humanoid.xml           # Standard MuJoCo model
-│
-├── envs/
-│   ├── **init**.py
-│   └── humanoid_env.py        # Custom wrapper for MuJoCo Humanoid
-│
-├── agents/
-│   ├── **init**.py
-│   ├── policy.py              # BasePolicy and agent classes
-│   └── ppo.py                 # PPO implementation
-│
-├── utils/
-│   ├── **init**.py
-│   ├── logger.py              # Logging and metrics
-│   ├── checkpoint.py          # Model save/load
-│   └── config.py              # Experiment configuration
-│
-├── scripts/
-│   ├── train.py               # Main training script
-│   ├── rollout.py             # Offline trajectory generation
-│   ├── play.py                # Trajectory replay with GUI
-│   └── test_mujoco.py         # Basic MuJoCo test
-│
-├── models/                    # Saved model checkpoints
-└── README.md
+*   **`agents/`**: Contains the RL algorithms (e.g., `PPOAgent` in `ppo.py`) and policy interfaces (`policy.py`).
+*   **`assets/`**: Stores MuJoCo XML model files (e.g., `humanoid.xml`).
+*   **`envs/`**: Custom MuJoCo environment wrappers (`humanoid_env.py`) that handle simulation steps, resets, and rendering.
+*   **`models/`**: PyTorch neural network architectures (`actor_critic.py`, `base_dnn.py`).
+*   **`scripts/`**: Executable scripts for training, testing, and visualization.
+*   **`utils/`**: Helper modules for replay buffers (`buffer.py`) and logging (`logger.py`).
 
-````
+### Output Directories
 
----
+These directories are generated during usage:
 
-## Installation
-
-1. Install **MuJoCo >= 2.3** and the `mjkey.txt` license as described in the [official documentation](https://mujoco.org/).  
-2. Create a Python 3.10+ virtual environment and install dependencies:
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-````
-
-> Note: `requirements.txt` should include at least `mujoco`, `numpy`, and optionally `torch` or other RL libraries.
+*   **`checkpoints/`**: Stores the trained model weights.
+    *   Created by `scripts.train`.
+    *   Structure: `checkpoints/<run_id>/model_epoch_<N>.pth`.
+    *   Each `.pth` file contains the state dictionaries for the Actor, Critic, and their optimizers.
+*   **`data/`**: Contains simulation rollouts (trajectories).
+    *   Created by `scripts.rollout`.
+    *   Format: `.npz` files (NumPy archives).
+    *   Content: Arrays for `qpos`, `qvel`, `actions`, and `rewards` used for faithful replay.
+*   **`log/`**: Records training metrics.
+    *   Created by `scripts.train`.
+    *   Format: CSV files named with the run timestamp (e.g., `YYYY-MM-DD_HH-MM-SS_metrics.csv`).
+    *   Content: Epoch stats including Average Return, Loss (Actor/Critic), Entropy, and KL Divergence.
 
 ---
 
@@ -71,6 +49,18 @@ You should see the Humanoid model loaded correctly.
 
 ## Rollout and Replay
 
+## Training
+
+```bash
+python3 -m scripts.train   
+```
+
+* Performs headless RL training
+* Saves checkpoints in `models/`
+* Logs metrics via `utils/logger.py`
+
+---
+
 ### Generate trajectories
 
 ```bash
@@ -79,7 +69,7 @@ python3 -m scripts.rollout
 
 This saves trajectories (`qpos` and `qvel`) to a `.npz` file.
 
-### Replay trajectories
+### Play trajectories
 
 ```bash
 python3 -m scripts.play --file path/to/trajectory.npz --fps 60
@@ -91,27 +81,4 @@ python3 -m scripts.play --file path/to/trajectory.npz --fps 60
 
 ---
 
-## Training
 
-```bash
-python3 -m scripts.train
-```
-
-* Performs headless RL training
-* Saves checkpoints in `models/`
-* Logs metrics via `utils/logger.py`
-
----
-
-## Notes
-
-* This is a **personal project** for experimenting with DRL on MuJoCo Humanoids.
-* The replay GUI uses `mujoco.viewer.launch_passive()` to ensure trajectory fidelity.
-* All training logic is independent from visualization.
-
----
-
-## References
-
-* [MuJoCo](https://mujoco.org/)
-* Personal experiments with Humanoid RL in Python
