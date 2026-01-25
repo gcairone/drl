@@ -1,8 +1,10 @@
 from typing import Dict, Any
 import argparse
 import numpy as np
+import torch
 from envs.humanoid_env import HumanoidEnv
 from agents.policy import BasePolicy, RandomPolicy
+from agents.ppo import PPOAgent
 
 
 def run_rollout(env: HumanoidEnv, policy: BasePolicy, max_steps: int = 1000) -> Dict[str, np.ndarray]:
@@ -47,10 +49,20 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=str, default="data/humanoid_rollout.npz")
     parser.add_argument("--steps", type=int, default=1000)
+    parser.add_argument("--model", type=str, default=None, help="Path to PPO checkpoint")
     args = parser.parse_args()
 
     env = HumanoidEnv(render=False)
-    policy = RandomPolicy(env.action_dim)  # Replace with real policy when available
+    
+    if args.model:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"Loading PPO model from {args.model} on {device}")
+        agent = PPOAgent(state_dim=env.obs_dim, action_dim=env.action_dim, device=device)
+        agent.load(args.model)
+        policy = agent.get_policy()
+    else:
+        print("Using RandomPolicy")
+        policy = RandomPolicy(env.action_dim)
 
     traj = run_rollout(env, policy, max_steps=args.steps)
     np.savez(args.output, **traj)

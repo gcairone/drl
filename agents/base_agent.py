@@ -1,52 +1,60 @@
+from typing import Dict, Any, Tuple
 import torch
 import numpy as np
+from agents.policy import BasePolicy
 
 class BaseAgent:
     """
-    Classe base astratta per agenti RL (PPO, SAC, DQN, etc.).
-    Definisce l'interfaccia comune per training, salvataggio e selezione azioni.
+    Abstract base class for RL agents (PPO, SAC, DQN, etc.).
+    Defines the common interface for training, saving, and action selection.
     """
-    def __init__(self, state_dim, action_dim, device='cpu'):
+    def __init__(self, state_dim: int, action_dim: int, device: str = 'cpu') -> None:
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.device = device
 
-    def select_action(self, state, training=True):
+    def select_action(self, state: np.ndarray, training: bool = True) -> Tuple[np.ndarray, Dict[str, Any]]:
         """
-        Seleziona un'azione dato uno stato.
+        Selects an action given a state.
         
         Args:
-            state (np.ndarray): Stato corrente.
-            training (bool): Se True, usa esplorazione (es. sampling stocastico).
-                             Se False, usa exploitazione (es. media deterministica).
+            state (np.ndarray): Current state.
+            training (bool): If True, uses exploration (e.g., stochastic sampling).
+                             If False, uses exploitation (e.g., deterministic mean).
         
         Returns:
-            action (np.ndarray): Azione da applicare nell'ambiente.
-            extra_info (dict): Info aggiuntive (es. log_prob per PPO, Q-val per DQN) utili per il buffer.
+            action (np.ndarray): Action to apply in the environment.
+            extra_info (dict): Additional info (e.g., log_prob for PPO, Q-val for DQN) useful for the buffer.
         """
         raise NotImplementedError
 
-    def update(self, buffer):
+    def update(self, buffer: Any) -> Dict[str, float]:
         """
-        Aggiorna i parametri dell'agente usando i dati raccolti nel buffer.
+        Updates the agent's parameters using data collected in the buffer.
+        
+        Args:
+            buffer (Any): The replay buffer containing training data.
         
         Returns:
-            metrics (dict): Dizionario con metriche di training (loss, entropy, etc.) per il logger.
+            metrics (dict): Dictionary with training metrics (loss, entropy, etc.) for the logger.
         """
         raise NotImplementedError
 
-    def save(self, filepath):
-        """Salva lo stato completo dell'agente (pesi reti + stati ottimizzatori)."""
+    def save(self, filepath: str) -> None:
+        """Saves the complete agent state (network weights + optimizer states)."""
         raise NotImplementedError
 
-    def load(self, filepath):
-        """Carica lo stato completo dell'agente."""
+    def load(self, filepath: str) -> None:
+        """Loads the complete agent state."""
         raise NotImplementedError
 
-    def get_policy(self):
+    def get_policy(self) -> BasePolicy:
         """
-        Restituisce un oggetto Policy (compatibile con agents/policy.py) 
-        per l'uso in rollout/play separati dal training.
-        Di solito restituisce l'Actor wrappato in una TorchPolicy.
+        Returns a Policy object (compatible with agents/policy.py) 
+        for use in rollout/play separate from training.
+        Usually returns the Actor wrapped in a TorchPolicy.
+        
+        Returns:
+            BasePolicy: The policy object.
         """
         raise NotImplementedError
