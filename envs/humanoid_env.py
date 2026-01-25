@@ -61,7 +61,7 @@ class HumanoidEnv:
         return float(self.data.qvel[0])  # velocità torso in avanti
 
     def _is_done(self):
-        return self.data.qpos[2] < 0.8  # humanoid caduto
+        return self.data.qpos[2] < 0.2  # humanoid caduto
 
     def _set_state(self, qpos, qvel):
         """Imposta qpos e qvel senza fare simulazione fisica aggiuntiva."""

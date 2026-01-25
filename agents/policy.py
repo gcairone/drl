@@ -47,7 +47,7 @@ class TorchPolicy(BasePolicy):
     """
     Wrapper to use a PyTorch model as a policy.
     """
-    def __init__(self, model, device='cpu'):
+    def __init__(self, model, device='cpu'):   
         self.model = model
         self.device = device
 

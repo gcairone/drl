@@ -2,7 +2,7 @@
 import argparse
 import numpy as np
 from envs.humanoid_env import HumanoidEnv
-from agents.policy import NullPolicy
+from agents.policy import NullPolicy, RandomPolicy
 
 
 def run_rollout(env, policy, max_steps=1000):
@@ -39,7 +39,7 @@ def main():
     args = parser.parse_args()
 
     env = HumanoidEnv(render=False)
-    policy = NullPolicy(env.action_dim)  # sostituire con policy reale
+    policy = RandomPolicy(env.action_dim)  # sostituire con policy reale
 
     traj = run_rollout(env, policy, max_steps=args.steps)
     np.savez(args.output, **traj)
