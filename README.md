@@ -1,13 +1,12 @@
 # DRL Humanoid
 
-Personal project to experiment with **Deep Reinforcement Learning (DRL) on a Humanoid** using MuJoCo.  
-Includes a custom environment, basic agents, and utilities for training, rollout, and trajectory replay.
+Deep Reinforcement Learning on a Humanoid using MuJoCo
 
 ---
 
 ## Project Structure
 
-The project is organized into modular components:
+The project is organized into:
 
 *   **`agents/`**: Contains the RL algorithms (e.g., `PPOAgent` in `ppo.py`) and policy interfaces (`policy.py`).
 *   **`assets/`**: Stores MuJoCo XML model files (e.g., `humanoid.xml`).
@@ -57,7 +56,7 @@ python3 -m scripts.train
 
 * Performs headless RL training
 * Saves checkpoints in `models/`
-* Logs metrics via `utils/logger.py`
+* Logs metrics via `utils/logger.py` in `log/`
 
 ---
 
@@ -67,7 +66,7 @@ python3 -m scripts.train
 python3 -m scripts.rollout
 ```
 
-This saves trajectories (`qpos` and `qvel`) to a `.npz` file.
+This saves trajectories (`qpos` and `qvel`) to a `.npz` file in `data/`
 
 ### Play trajectories
 
@@ -77,7 +76,6 @@ python3 -m scripts.play --file path/to/trajectory.npz --fps 60
 
 * Step-by-step replay of saved trajectories
 * FPS and skip are configurable
-* Fully faithful to the saved trajectory (does not advance physics internally)
 
 ---
 
