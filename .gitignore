@@ -63,3 +63,4 @@ htmlcov/
 # Checkpoints and logs files
 checkpoints/
 log/
+plots/

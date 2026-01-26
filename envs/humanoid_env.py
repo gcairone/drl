@@ -73,10 +73,14 @@ class HumanoidEnv:
         return np.concatenate([self.data.qpos, self.data.qvel]).astype(np.float32)
 
     def _compute_reward(self) -> float:
-        return float(self.data.qvel[0])  # Forward torso velocity
+        torso_height = self.data.qpos[2]
 
+        alive_reward = torso_height if torso_height > 1.2 else 0.0
+
+        return alive_reward 
+    
     def _is_done(self) -> bool:
-        return self.data.qpos[2] < 0.2  # Humanoid fell
+        return self.data.qpos[2] < 0.2  
 
     def _set_state(self, qpos: np.ndarray, qvel: np.ndarray) -> None:
         """

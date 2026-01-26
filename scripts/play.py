@@ -30,7 +30,11 @@ def replay_trajectory(env: HumanoidEnv, trajectory: Dict[str, np.ndarray], fps: 
         # Update GUI without advancing physics
         env.render_sync(state_only=True)
 
-        print(f"Time {i * dt_sim:.3f}s: step {i}")
+        msg = f"Time {i * dt_sim:.3f}s: step {i}"
+        if "rewards" in trajectory:
+            msg += f", reward={trajectory['rewards'][i]:.4f}"
+        
+        print(msg)
 
         time.sleep(1 / fps)  # Maintain stable frame rate
 
@@ -50,6 +54,8 @@ def main() -> None:
     # Load trajectory
     data = np.load(args.file)
     trajectory = {"qpos": data["qpos"], "qvel": data["qvel"]}
+    if "rewards" in data:
+        trajectory["rewards"] = data["rewards"]
 
     # Create environment
     env = HumanoidEnv(render=True)
