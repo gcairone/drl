@@ -47,7 +47,7 @@ def run_rollout(env: HumanoidEnv, policy: BasePolicy, max_steps: int = 1000) -> 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output", type=str, default="data/humanoid_rollout.npz")
+    parser.add_argument("--output", type=str, default="results/rollouts/humanoid_rollout.npz")
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--model", type=str, default=None, help="Path to PPO checkpoint")
     args = parser.parse_args()

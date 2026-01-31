@@ -11,7 +11,11 @@ class HumanoidEnv:
     Uses Renderer + RenderContext for controllable step-by-step rendering.
     """
 
-    def __init__(self, model_path: Optional[str] = None, render: bool = False, seed: Optional[int] = None) -> None:
+    def __init__(self, model_path: Optional[str] = None, 
+                 render: bool = False, 
+                 seed: Optional[int] = None, 
+                 noise_scale: float = 0.1,
+                 ctrl_cost_weight: float = 0.01) -> None:
         # XML model path
         if model_path is None:
             model_path = os.path.join(
@@ -35,6 +39,9 @@ class HumanoidEnv:
 
         self._viewer_ctx = None  # for passive viewer
 
+        self.noise_scale = noise_scale
+        self.ctrl_cost_weight = ctrl_cost_weight
+
     # -------------------
     # Simulation Methods
     # -------------------
@@ -46,6 +53,11 @@ class HumanoidEnv:
             np.ndarray: Initial observation.
         """
         mujoco.mj_resetData(self.model, self.data)
+
+        # Add slight noise to initial state (randomization)
+        self.data.qpos[:] += self.rng.uniform(-self.noise_scale, self.noise_scale, size=self.model.nq)
+        self.data.qvel[:] += self.rng.uniform(-self.noise_scale, self.noise_scale, size=self.model.nv)
+
         mujoco.mj_forward(self.model, self.data)
         return self._get_obs()
 
@@ -77,7 +89,9 @@ class HumanoidEnv:
 
         alive_reward = torso_height if torso_height > 1.2 else 0.0
 
-        return alive_reward 
+        ctrl_cost = self.ctrl_cost_weight * np.sum(np.square(self.data.ctrl))
+
+        return alive_reward - ctrl_cost
     
     def _is_done(self) -> bool:
         return self.data.qpos[2] < 0.2  

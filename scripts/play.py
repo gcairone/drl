@@ -47,7 +47,7 @@ def replay_trajectory(env: HumanoidEnv, trajectory: Dict[str, np.ndarray], fps: 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--file", type=str, help="Path to trajectory npz", default="data/humanoid_rollout.npz")
+    parser.add_argument("--file", type=str, help="Path to trajectory npz", default="results/rollouts/humanoid_rollout.npz")
     parser.add_argument("--fps", type=int, default=60, help="Frames per second for GUI")
     args = parser.parse_args()
 

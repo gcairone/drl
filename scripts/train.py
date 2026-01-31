@@ -16,7 +16,7 @@ def train(args):
 
     # Setup directories
     # Logs will be saved in log/ with the run_id in the filename
-    log_dir = "log"
+    log_dir = os.path.join(args.log_path)
     
     # Models will be saved in a subdirectory of save_dir named after the run_id
     model_save_dir = os.path.join(args.save_dir, run_id)
@@ -158,13 +158,14 @@ if __name__ == "__main__":
     parser.add_argument("--max_ep_len", type=int, default=1000)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--clip_ratio", type=float, default=0.2)
-    parser.add_argument("--lr", type=float, default=3e-4)
+    parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--lam", type=float, default=0.97)
     parser.add_argument("--pi_iters", type=int, default=80)
     parser.add_argument("--v_iters", type=int, default=80)
     parser.add_argument("--target_kl", type=float, default=0.01)
-    parser.add_argument("--save_dir", type=str, default="checkpoints")
+    parser.add_argument("--save_dir", type=str, default="results/checkpoints")
     parser.add_argument("--save_freq", type=int, default=10)
+    parser.add_argument("--log_path", type=str, default="results/logs")
     args = parser.parse_args()
     
     train(args)

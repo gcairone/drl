@@ -24,12 +24,12 @@ def test_dnn():
     print("Sample output shape:", sample_output.shape)
 
     # Salva il modello
-    model.save("checkpoints/test_dnn_model.pth")
+    model.save("results/checkpoints/test_dnn_model.pth")
     print("Model saved to test_dnn_model.pth")
 
     # Carica il modello
     loaded_model = BaseDNN(input_dim, output_dim, hidden_layers)
-    loaded_model.load("checkpoints/test_dnn_model.pth")
+    loaded_model.load("results/checkpoints/test_dnn_model.pth")
     print("Model loaded from test_dnn_model.pth")
 
     # Verifica che il modello caricato produca lo stesso output

@@ -1,0 +1,3 @@
+- randomization in env.reset()
+- scripts/eval.py
+- rich output in train.py, with estimate of time to finish
