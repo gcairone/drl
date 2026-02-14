@@ -22,8 +22,6 @@ class Logger:
             self.writer = csv.DictWriter(self.file, fieldnames=self.keys)
             self.writer.writeheader()
         
-        # Ensure we only write keys that are in the header
-        # This handles cases where metrics might change order or keys (though unlikely in this loop)
         row = {k: metrics.get(k, 0) for k in self.keys}
         self.writer.writerow(row)
         self.file.flush()

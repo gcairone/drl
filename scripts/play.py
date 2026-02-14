@@ -24,10 +24,8 @@ def replay_trajectory(env: HumanoidEnv, trajectory: Dict[str, np.ndarray], fps: 
         qpos = trajectory["qpos"][i]
         qvel = trajectory["qvel"][i]
 
-        # Update simulator state
         env._set_state(qpos, qvel)
 
-        # Update GUI without advancing physics
         env.render_sync(state_only=True)
 
         msg = f"Time {i * dt_sim:.3f}s: step {i}"
@@ -36,7 +34,7 @@ def replay_trajectory(env: HumanoidEnv, trajectory: Dict[str, np.ndarray], fps: 
         
         print(msg)
 
-        time.sleep(1 / fps)  # Maintain stable frame rate
+        time.sleep(1 / fps)  
 
         if not viewer.is_running():
             print("[INFO] Viewer closed by user")

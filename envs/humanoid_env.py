@@ -16,7 +16,6 @@ class HumanoidEnv:
                  seed: Optional[int] = None, 
                  noise_scale: float = 0.1,
                  ctrl_cost_weight: float = 0.01) -> None:
-        # XML model path
         if model_path is None:
             model_path = os.path.join(
                 os.path.dirname(__file__),
@@ -26,15 +25,12 @@ class HumanoidEnv:
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Humanoid XML file not found: {model_path}")
 
-        # Load model and data
         self.model = mujoco.MjModel.from_xml_path(model_path)
         self.data = mujoco.MjData(self.model)
 
-        # Observation/Action dimensions
         self.obs_dim = self.model.nq + self.model.nv
         self.action_dim = self.model.nu
 
-        # Random seed
         self.rng = np.random.default_rng(seed)
 
         self._viewer_ctx = None  # for passive viewer
@@ -54,7 +50,7 @@ class HumanoidEnv:
         """
         mujoco.mj_resetData(self.model, self.data)
 
-        # Add slight noise to initial state (randomization)
+        # add slight noise to initial state 
         self.data.qpos[:] += self.rng.uniform(-self.noise_scale, self.noise_scale, size=self.model.nq)
         self.data.qvel[:] += self.rng.uniform(-self.noise_scale, self.noise_scale, size=self.model.nv)
 

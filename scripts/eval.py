@@ -3,7 +3,6 @@ import numpy as np
 import os
 import sys
 
-# Add project root to path to allow imports from envs
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from envs.humanoid_env import HumanoidEnv
@@ -21,10 +20,8 @@ def evaluate_trajectory(file_path: str) -> None:
         return
 
     qpos = data['qpos']
-    # In MuJoCo Humanoid, qpos[2] is the Z-coordinate (height) of the torso
     z_heights = qpos[:, 2]
     
-    # Instantiate env briefly to get the simulation timestep
     try:
         env = HumanoidEnv(render=False)
         dt = env.model.opt.timestep
@@ -32,7 +29,6 @@ def evaluate_trajectory(file_path: str) -> None:
         print(f"Warning: Could not load environment to get timestep ({e}). Defaulting to 0.002s")
         dt = 0.002
 
-    # Threshold defined in HumanoidEnv._is_done (z < 0.2)
     fail_threshold = 0.2
 
     episodes_duration = []
@@ -42,12 +38,10 @@ def evaluate_trajectory(file_path: str) -> None:
         if z >= fail_threshold:
             current_episode_steps += 1
         else:
-            # Fall detected. End of current standing segment.
             if current_episode_steps > 0:
                 episodes_duration.append(current_episode_steps * dt)
             current_episode_steps = 0
     
-    # If the trajectory ends while standing, count that segment too
     if current_episode_steps > 0:
         episodes_duration.append(current_episode_steps * dt)
 

@@ -22,19 +22,16 @@ def main():
         print(f"Error: File {args.file} not found.")
         return
 
-    # Load data
     try:
         df = pd.read_csv(args.file)
     except Exception as e:
         print(f"Error reading CSV file: {e}")
         return
 
-    # Check if dataframe is empty
     if df.empty:
         print("Error: The CSV file is empty.")
         return
 
-    # Statistics
     print("=" * 60)
     print(f"STATISTICS: {os.path.basename(args.file)}")
     print("=" * 60)
@@ -50,12 +47,9 @@ def main():
         print(f"Mean Return (Last {last_10_percent} eps): {avg_last:.4f}")
     
     print("-" * 60)
-    # Print summary of all numeric columns
     print(df.describe().transpose()[['mean', 'std', 'min', 'max']])
     print("=" * 60)
 
-    # Plotting
-    # Filter columns to plot (exclude Epoch and Time usually, but keep them if needed)
     plot_cols = [col for col in ["Ret", "Len", "LossPi", "LossV", "Entropy", "KL"] if col in df.columns]
     
     if not plot_cols:
@@ -73,7 +67,6 @@ def main():
         ax = axes[i]
         ax.plot(df["Epoch"], df[metric], label="Raw", alpha=0.4, color='gray')
         
-        # Rolling average for smoother plots
         if len(df) > args.ma:
             rolling = df[metric].rolling(window=args.ma).mean()
             ax.plot(df["Epoch"], rolling, label=f"MA ({args.ma})", linewidth=2)
@@ -83,7 +76,6 @@ def main():
         ax.grid(True, alpha=0.3)
         ax.legend()
 
-    # Hide unused subplots
     for i in range(n_metrics, len(axes)):
         fig.delaxes(axes[i])
 

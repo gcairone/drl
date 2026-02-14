@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from typing import Dict
+from typing import Dict, Any
 
 class PPOBuffer:
     """
@@ -67,8 +67,6 @@ class PPOBuffer:
             
         self.adv_buf[path_slice] = advs
         
-        # The targets for the value function are the "returns" (rewards-to-go)
-        # Return = Advantage + Value
         self.ret_buf[path_slice] = advs + vals[:-1]
         
         self.path_start_idx = self.ptr
@@ -82,7 +80,6 @@ class PPOBuffer:
         assert self.ptr == self.max_size, "Buffer not full before get()!"
         self.ptr, self.path_start_idx = 0, 0
         
-        # Advantage Normalization (Standardization)
         adv_mean, adv_std = np.mean(self.adv_buf), np.std(self.adv_buf)
         self.adv_buf = (self.adv_buf - adv_mean) / (adv_std + 1e-8)
         
@@ -96,3 +93,66 @@ class PPOBuffer:
         )
         
         return {k: torch.as_tensor(v, dtype=torch.float32, device=self.device) for k,v in data.items()}
+    
+    def filestore(self, filename: str) -> None:
+        """
+        Save the buffer contents to a file.
+        
+        Args:
+            filename (str): The file path to save the buffer data.
+        """
+        np.savez_compressed(
+            filename,
+            obs=self.obs_buf,
+            act=self.act_buf,
+            adv=self.adv_buf,
+            rew=self.rew_buf,
+            ret=self.ret_buf,
+            val=self.val_buf,
+            logp=self.logp_buf
+        )
+        # print(f"Buffer saved to {filename}")
+        
+    def fileread(self, filename: str) -> None:
+        """
+        Load the buffer contents from a file.
+        
+        Args:
+            filename (str): The file path to load the buffer data from.
+        """
+        data = np.load(filename)
+        self.obs_buf = data['obs']
+        self.act_buf = data['act']
+        self.adv_buf = data['adv']
+        self.rew_buf = data['rew']
+        self.ret_buf = data['ret']
+        self.val_buf = data['val']
+        self.logp_buf = data['logp']
+        self.ptr = self.max_size  # Assume buffer is full after loading
+        # print(f"Buffer loaded from {filename}")
+
+    def state_dict(self) -> Dict[str, Any]:
+        """Returns the state of the buffer as a dictionary."""
+        return {
+            'obs_buf': self.obs_buf,
+            'act_buf': self.act_buf,
+            'adv_buf': self.adv_buf,
+            'rew_buf': self.rew_buf,
+            'ret_buf': self.ret_buf,
+            'val_buf': self.val_buf,
+            'logp_buf': self.logp_buf,
+            'ptr': self.ptr,
+            'path_start_idx': self.path_start_idx
+        }
+
+    def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
+        """Loads the buffer state from a dictionary."""
+        self.obs_buf = state_dict['obs_buf']
+        self.act_buf = state_dict['act_buf']
+        self.adv_buf = state_dict['adv_buf']
+        self.rew_buf = state_dict['rew_buf']
+        self.ret_buf = state_dict['ret_buf']
+        self.val_buf = state_dict['val_buf']
+        self.logp_buf = state_dict['logp_buf']
+        self.ptr = state_dict['ptr']
+        self.path_start_idx = state_dict['path_start_idx']

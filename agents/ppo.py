@@ -16,7 +16,6 @@ class PPOAgent(BaseAgent):
         self.train_v_iters = train_v_iters
         self.target_kl = target_kl
         
-        # In PPO we have Actor (Policy) and Critic (Value Function)
         self.actor = GaussianActor(state_dim, action_dim).to(device)
         self.critic = Critic(state_dim).to(device)
         
@@ -27,11 +26,8 @@ class PPOAgent(BaseAgent):
         state_t = torch.as_tensor(state, dtype=torch.float32, device=self.device)
         
         with torch.no_grad():
-            # Get action and log_prob from Actor
-            # If training=True, we want stochastic behavior (deterministic=False)
             action_t, log_prob_t = self.actor(state_t, deterministic=not training, with_logprob=True)
             
-            # Get value from Critic
             value_t = self.critic(state_t)
             
         action = action_t.cpu().numpy()
@@ -48,21 +44,17 @@ class PPOAgent(BaseAgent):
         adv = data['adv']
         logp_old = data['logp']
 
-        # Policy Update
         for i in range(self.train_pi_iters):
             self.optimizer_actor.zero_grad()
             
-            # Evaluate actions (using internal _distribution method of GaussianActor)
             dist = self.actor._distribution(obs)
             logp = dist.log_prob(act).sum(axis=-1)
             entropy = dist.entropy().sum(axis=-1).mean()
             
-            # Ratio and Clipping
             ratio = torch.exp(logp - logp_old)
             clip_adv = torch.clamp(ratio, 1 - self.clip_ratio, 1 + self.clip_ratio) * adv
             loss_pi = -(torch.min(ratio * adv, clip_adv)).mean()
             
-            # Early stopping based on KL
             approx_kl = (logp_old - logp).mean().item()
             if approx_kl > 1.5 * self.target_kl:
                 break
@@ -70,7 +62,6 @@ class PPOAgent(BaseAgent):
             loss_pi.backward()
             self.optimizer_actor.step()
 
-        # Value Function Update
         for i in range(self.train_v_iters):
             self.optimizer_critic.zero_grad()
             value = self.critic(obs).squeeze()
@@ -80,21 +71,23 @@ class PPOAgent(BaseAgent):
 
         return {"loss_actor": loss_pi.item(), "loss_critic": loss_v.item(), "entropy": entropy.item(), "kl": approx_kl}
 
-    def save(self, filepath: str) -> None:
-        # Save everything needed to resume training
-        torch.save({
+    def save(self, filepath: str, **kwargs) -> None:
+        state = {
             'actor': self.actor.state_dict(),
             'critic': self.critic.state_dict(),
             'opt_actor': self.optimizer_actor.state_dict(),
             'opt_critic': self.optimizer_critic.state_dict()
-        }, filepath)
+        }
+        state.update(kwargs)
+        torch.save(state, filepath)
 
-    def load(self, filepath: str) -> None:
-        checkpoint = torch.load(filepath, map_location=self.device)
+    def load(self, filepath: str) -> Dict[str, Any]:
+        checkpoint = torch.load(filepath, map_location=self.device, weights_only=False)
         self.actor.load_state_dict(checkpoint['actor'])
         self.critic.load_state_dict(checkpoint['critic'])
         self.optimizer_actor.load_state_dict(checkpoint['opt_actor'])
         self.optimizer_critic.load_state_dict(checkpoint['opt_critic'])
+        return checkpoint
 
     def get_policy(self) -> BasePolicy:
         # This method is crucial: it extracts only the "Actor" part for use with

@@ -11,11 +11,8 @@ class GaussianActor(nn.Module):
     """
     def __init__(self, state_dim: int, action_dim: int, hidden_layers: List[int] = [64, 64], activation: Type[nn.Module] = nn.ReLU, log_std_init: float = -0.5) -> None:
         super().__init__()
-        # The mean is predicted by the neural network
         self.mean_net = BaseDNN(state_dim, action_dim, hidden_layers, activation)
         
-        # The log_std is a learnable parameter, independent of the state (common in PPO)
-        # Initialized to a specific value (e.g. -0.5 -> std approx 0.6)
         self.log_std = nn.Parameter(torch.ones(action_dim) * log_std_init)
 
     def _distribution(self, state: torch.Tensor) -> Normal:
@@ -46,7 +43,6 @@ class GaussianActor(nn.Module):
             action = dist.sample()
 
         if with_logprob:
-            # Sum over the action dimension to get the log_prob of the entire action vector
             log_prob = dist.log_prob(action).sum(axis=-1)
             return action, log_prob
         

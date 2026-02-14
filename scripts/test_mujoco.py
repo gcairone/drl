@@ -8,7 +8,6 @@ import mujoco
 
 
 def main():
-    # Crea environment con rendering
     env = HumanoidEnv(render=True)
 
     policy = NullPolicy(env.action_dim)
