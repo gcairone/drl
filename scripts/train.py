@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 import numpy as np
 import torch
-from envs.humanoid_env import HumanoidEnv
+from envs.vec_env import VecHumanoidEnv
 from agents.ppo import PPOAgent
 from utils.buffer import PPOBuffer
 from utils.logger import Logger
@@ -23,9 +23,16 @@ def train(args):
 
     logger = Logger(output_dir=log_dir, output_fname=f"{run_id}_metrics.csv")
 
-    env = HumanoidEnv(render=False)
-    obs_dim = env.obs_dim
-    action_dim = env.action_dim
+    if args.seed is not None:
+        torch.manual_seed(args.seed)
+
+    assert args.steps_per_epoch % args.num_envs == 0, "steps_per_epoch must be divisible by num_envs"
+    steps_per_env = args.steps_per_epoch // args.num_envs
+
+    env_kwargs = dict(noise_scale=args.noise_scale, min_height=args.min_height, term_height=args.term_height, frame_skip=args.frame_skip)
+    envs = VecHumanoidEnv(args.num_envs, seed=args.seed, render=False, **env_kwargs)
+    obs_dim = envs.obs_dim
+    action_dim = envs.action_dim
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -36,10 +43,12 @@ def train(args):
         lr=args.lr, 
         gamma=args.gamma, 
         clip_ratio=args.clip_ratio,
-        train_pi_iters=args.pi_iters,
-        train_v_iters=args.v_iters,
+        update_epochs=args.update_epochs,
+        minibatch_size=args.minibatch_size,
+        max_grad_norm=args.max_grad_norm,
         target_kl=args.target_kl,
-        device=str(device)
+        device=str(device),
+        obs_norm=args.obs_norm
     )
 
     buffer = PPOBuffer(
@@ -48,7 +57,8 @@ def train(args):
         size=args.steps_per_epoch, 
         gamma=args.gamma, 
         lam=args.lam, 
-        device=str(device)
+        device=str(device),
+        num_envs=args.num_envs
     )
 
     start_epoch = 0
@@ -60,59 +70,64 @@ def train(args):
                 start_epoch = checkpoint['epoch']
                 print(f"Resumed from epoch {start_epoch}")
             if 'buffer' in checkpoint:
-                buffer.load_state_dict(checkpoint['buffer'])
-                print("Buffer state restored.")
+                if np.shape(checkpoint['buffer']['obs_buf']) == buffer.obs_buf.shape:
+                    buffer.load_state_dict(checkpoint['buffer'])
+                    print("Buffer state restored.")
+                else:
+                    print("Buffer state skipped (saved with a different num_envs/steps_per_epoch).")
         else:
             print(f"Warning: Checkpoint file {args.resume} not found. Starting from scratch.")
 
     start_time = time.time()
-    obs = env.reset()
+    obs = envs.reset()
     
-    ep_ret, ep_len = 0, 0
+    ep_ret = np.zeros(args.num_envs)
+    ep_len = np.zeros(args.num_envs, dtype=np.int64)
     ep_returns = []
     ep_lengths = []
 
     for epoch in range(start_epoch, args.epochs):
-        # 1. rollout phase
-        for t in range(args.steps_per_epoch):
+        epoch_start = time.time()
+
+        # 1. rollout phase: all envs step together, one batched forward pass per step
+        for t in range(steps_per_env):
             
             action, info = agent.select_action(obs, training=True)
-            val = info["value"]
-            logp = info["log_prob"]
-            next_obs, reward, done, _ = env.step(action)
+            next_obs, reward, done, _ = envs.step(action)
             
             ep_ret += reward
             ep_len += 1
 
-            buffer.store(obs, action, reward, val, logp)
+            buffer.store(obs, action, reward, info["value"], info["log_prob"])
             
             obs = next_obs
 
             timeout = ep_len == args.max_ep_len
-            terminal = done or timeout
-            epoch_ended = (t == args.steps_per_epoch - 1)
+            epoch_ended = (t == steps_per_env - 1)
+            ended = done | timeout | epoch_ended
+            if not ended.any():
+                continue
 
-            if terminal or epoch_ended:
-                if epoch_ended and not terminal:
-                    _, info_next = agent.select_action(obs, training=True)
-                    last_val = info_next["value"]
-                elif timeout:
-                    _, info_next = agent.select_action(obs, training=True)
-                    last_val = info_next["value"]
-                else:
-                    last_val = 0.0
-                
-                buffer.finish_path(last_val)
+            # bootstrap with V(s_T) for trajectories cut by timeout or epoch end, 0 for terminal states
+            if (ended & ~done).any():
+                _, info_next = agent.select_action(obs, training=True)
+                last_vals = info_next["value"]
 
-                if terminal:
-                    ep_returns.append(ep_ret)
-                    ep_lengths.append(ep_len)
+            for i in np.flatnonzero(ended):
+                buffer.finish_path(0.0 if done[i] else last_vals[i], env_idx=i)
+
+                if done[i] or timeout[i]:
+                    ep_returns.append(ep_ret[i])
+                    ep_lengths.append(ep_len[i])
                     
-                    obs = env.reset()
-                    ep_ret, ep_len = 0, 0
+                    obs[i] = envs.reset_at(i)
+                    ep_ret[i], ep_len[i] = 0.0, 0
 
-        # 2. pppdate phase
+        rollout_time = time.time() - epoch_start
+
+        # 2. update phase
         metrics = agent.update(buffer)
+        update_time = time.time() - epoch_start - rollout_time
 
         avg_ret = np.mean(ep_returns) if ep_returns else 0.0
         avg_len = np.mean(ep_lengths) if ep_lengths else 0.0
@@ -124,25 +139,31 @@ def train(args):
             "Epoch": epoch + 1,
             "Ret": avg_ret,
             "Len": avg_len,
+            "LenSec": avg_len * envs.envs[0].dt,
             "LossPi": metrics['loss_actor'],
             "LossV": metrics['loss_critic'],
             "Entropy": metrics['entropy'],
             "KL": metrics['kl'],
-            "Time": time.time() - start_time
+            "UpdEpochs": metrics['update_epochs'],
+            "Time": time.time() - start_time,
+            "SPS": args.steps_per_epoch / (rollout_time + update_time),
+            "TRollout": rollout_time,
+            "TUpdate": update_time
         }
         
         logger.log(epoch_metrics)
 
         print(f"Epoch: {epoch_metrics['Epoch']}/{args.epochs} | "
-              f"Ret: {epoch_metrics['Ret']:.2f} | Len: {epoch_metrics['Len']:.1f} | "
+              f"Ret: {epoch_metrics['Ret']:.2f} | Len: {epoch_metrics['Len']:.1f} ({epoch_metrics['LenSec']:.2f}s) | "
               f"LossPi: {epoch_metrics['LossPi']:.4f} | "
               f"LossV: {epoch_metrics['LossV']:.4f} | "
               f"KL: {epoch_metrics['KL']:.4f} | "
+              f"SPS: {epoch_metrics['SPS']:.0f} | "
               f"Time: {epoch_metrics['Time']:.0f}s")
 
         if (epoch + 1) % args.save_freq == 0:
             save_path = os.path.join(model_save_dir, f"model_epoch_{epoch+1}.pth")
-            agent.save(save_path, epoch=epoch+1, buffer=buffer.state_dict())
+            agent.save(save_path, epoch=epoch+1, buffer=buffer.state_dict(), env_kwargs=env_kwargs)
             print(f"Model saved to {save_path}")
 
 if __name__ == "__main__":
@@ -152,14 +173,22 @@ if __name__ == "__main__":
     parser.add_argument("--max_ep_len", type=int, default=1000)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--clip_ratio", type=float, default=0.2)
-    parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--lam", type=float, default=0.97)
-    parser.add_argument("--pi_iters", type=int, default=80)
-    parser.add_argument("--v_iters", type=int, default=80)
-    parser.add_argument("--target_kl", type=float, default=0.01)
+    parser.add_argument("--update_epochs", type=int, default=10, help="Passes over the batch per update")
+    parser.add_argument("--minibatch_size", type=int, default=64, help="SGD minibatch size (<= 0: full batch)")
+    parser.add_argument("--max_grad_norm", type=float, default=0.5, help="Gradient clipping (<= 0: off)")
+    parser.add_argument("--target_kl", type=float, default=0.01, help="Early stop at KL > 1.5 * target_kl (<= 0: off)")
     parser.add_argument("--save_dir", type=str, default="results/checkpoints")
     parser.add_argument("--save_freq", type=int, default=50)
     parser.add_argument("--log_path", type=str, default="results/logs")
+    parser.add_argument("--num_envs", type=int, default=8, help="Parallel environments (batched inference)")
+    parser.add_argument("--seed", type=int, default=0, help="Seed for torch and the environments")
+    parser.add_argument("--noise_scale", type=float, default=0.01, help="Uniform noise added to qpos/qvel at reset")
+    parser.add_argument("--min_height", type=float, default=1.0, help="Torso height above which the alive reward is given")
+    parser.add_argument("--term_height", type=float, default=1.0, help="Torso height below which the episode terminates")
+    parser.add_argument("--frame_skip", type=int, default=3, help="Physics steps per action")
+    parser.add_argument("--obs_norm", action=argparse.BooleanOptionalAction, default=True, help="Normalize observations with running mean/std")
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume from")
     args = parser.parse_args()
     

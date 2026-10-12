@@ -23,8 +23,7 @@ def evaluate_trajectory(file_path: str) -> None:
     z_heights = qpos[:, 2]
     
     try:
-        env = HumanoidEnv(render=False)
-        dt = env.model.opt.timestep
+        dt = float(data['dt']) if 'dt' in data else HumanoidEnv(render=False).model.opt.timestep
     except Exception as e:
         print(f"Warning: Could not load environment to get timestep ({e}). Defaulting to 0.002s")
         dt = 0.002
@@ -33,6 +32,15 @@ def evaluate_trajectory(file_path: str) -> None:
 
     episodes_duration = []
     current_episode_steps = 0
+
+    if 'dones' in data:
+        # episode boundaries recorded by rollout (termination height may differ from 0.2)
+        for done in data['dones']:
+            current_episode_steps += 1
+            if done:
+                episodes_duration.append(current_episode_steps * dt)
+                current_episode_steps = 0
+        z_heights = []
 
     for z in z_heights:
         if z >= fail_threshold:
@@ -56,7 +64,7 @@ def evaluate_trajectory(file_path: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate standing time from a saved trajectory.")
-    parser.add_argument("--input", type=str, help="Path to .npz trajectory file (e.g., data/humanoid_rollout.npz)", default="data/humanoid_rollout.npz")
+    parser.add_argument("--input", type=str, help="Path to .npz trajectory file (e.g., results/rollouts/humanoid_rollout.npz)", default="results/rollouts/humanoid_rollout.npz")
     args = parser.parse_args()
     
     evaluate_trajectory(args.input)

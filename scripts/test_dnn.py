@@ -1,3 +1,4 @@
+import os
 import torch
 """
 No policy, only test of model training with random data, save/load of model.
@@ -12,6 +13,7 @@ def test_dnn():
     hidden_layers = [32, 32]
 
     model = BaseDNN(input_dim, output_dim, hidden_layers)
+    os.makedirs("results/checkpoints", exist_ok=True)
 
     print("Model architecture:")
     print(model)
@@ -52,7 +54,8 @@ def test_training():
         optimizer.step()
         print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
 
-    model.save("checkpoints/test_training_model.pth")
+    os.makedirs("results/checkpoints", exist_ok=True)
+    model.save("results/checkpoints/test_training_model.pth")
     print("Model saved to test_training_model.pth")
 
 

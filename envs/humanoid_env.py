@@ -14,8 +14,19 @@ class HumanoidEnv:
     def __init__(self, model_path: Optional[str] = None, 
                  render: bool = False, 
                  seed: Optional[int] = None, 
-                 noise_scale: float = 0.1,
-                 ctrl_cost_weight: float = 0.01) -> None:
+                 noise_scale: float = 0.01,
+                 ctrl_cost_weight: float = 0.01,
+                 min_height: float = 1.0,
+                 term_height: float = 1.0,
+                 frame_skip: int = 3) -> None:
+        """
+        Args:
+            noise_scale (float): Uniform noise added to qpos/qvel at reset. It also moves the torso
+                                 height, so large values start the feet inside the floor.
+            min_height (float): Torso height above which the alive reward is given.
+            term_height (float): Torso height below which the episode terminates.
+            frame_skip (int): Physics steps per action (control period = frame_skip * timestep).
+        """
         if model_path is None:
             model_path = os.path.join(
                 os.path.dirname(__file__),
@@ -37,6 +48,10 @@ class HumanoidEnv:
 
         self.noise_scale = noise_scale
         self.ctrl_cost_weight = ctrl_cost_weight
+        self.min_height = min_height
+        self.term_height = term_height
+        self.frame_skip = frame_skip
+        self.dt = self.model.opt.timestep * frame_skip
 
     # -------------------
     # Simulation Methods
@@ -70,7 +85,8 @@ class HumanoidEnv:
         action = np.asarray(action, dtype=np.float32)
         action = np.clip(action, -1.0, 1.0)
         self.data.ctrl[:] = action
-        mujoco.mj_step(self.model, self.data)
+        for _ in range(self.frame_skip):
+            mujoco.mj_step(self.model, self.data)
         obs = self._get_obs()
         reward = self._compute_reward()
         done = self._is_done()
@@ -83,14 +99,14 @@ class HumanoidEnv:
     def _compute_reward(self) -> float:
         torso_height = self.data.qpos[2]
 
-        alive_reward = torso_height if torso_height > 1.2 else 0.0
+        alive_reward = torso_height if torso_height > self.min_height else 0.0
 
         ctrl_cost = self.ctrl_cost_weight * np.sum(np.square(self.data.ctrl))
 
         return alive_reward - ctrl_cost
     
     def _is_done(self) -> bool:
-        return self.data.qpos[2] < 0.2  
+        return self.data.qpos[2] < self.term_height
 
     def _set_state(self, qpos: np.ndarray, qvel: np.ndarray) -> None:
         """

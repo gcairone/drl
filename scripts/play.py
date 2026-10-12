@@ -1,10 +1,10 @@
-from typing import Dict
+from typing import Dict, Optional
 import time
 import numpy as np
 import argparse
 from envs.humanoid_env import HumanoidEnv
 
-def replay_trajectory(env: HumanoidEnv, trajectory: Dict[str, np.ndarray], fps: int = 60) -> None:
+def replay_trajectory(env: HumanoidEnv, trajectory: Dict[str, np.ndarray], fps: int = 60, dt: Optional[float] = None) -> None:
     """
     Replays a saved trajectory in the environment viewer.
 
@@ -12,8 +12,9 @@ def replay_trajectory(env: HumanoidEnv, trajectory: Dict[str, np.ndarray], fps: 
         env (HumanoidEnv): The environment instance.
         trajectory (Dict[str, np.ndarray]): Dictionary containing 'qpos' and 'qvel' arrays.
         fps (int): Frames per second for the playback.
+        dt (float, optional): Time between saved states (control period). Defaults to the physics timestep.
     """
-    dt_sim = env.model.opt.timestep
+    dt_sim = dt if dt is not None else env.model.opt.timestep
     skip = max(1, int(1 / fps / dt_sim))
     print(f"[INFO] dt_sim={dt_sim:.6f}s, fps={fps}, skip={skip} steps/frame")
 
@@ -59,7 +60,8 @@ def main() -> None:
     env = HumanoidEnv(render=True)
 
     # Replay
-    replay_trajectory(env, trajectory, fps=args.fps)
+    dt = float(data["dt"]) if "dt" in data else None
+    replay_trajectory(env, trajectory, fps=args.fps, dt=dt)
 
 if __name__ == "__main__":
     main()

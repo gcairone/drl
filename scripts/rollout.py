@@ -1,5 +1,6 @@
 from typing import Dict, Any
 import argparse
+import os
 import numpy as np
 import torch
 from envs.humanoid_env import HumanoidEnv
@@ -25,6 +26,7 @@ def run_rollout(env: HumanoidEnv, policy: BasePolicy, max_steps: int = 1000) -> 
         "qvel": [],
         "actions": [],
         "rewards": [],
+        "dones": [],
     }
 
     for step in range(max_steps):
@@ -35,6 +37,7 @@ def run_rollout(env: HumanoidEnv, policy: BasePolicy, max_steps: int = 1000) -> 
         trajectory["qvel"].append(env.data.qvel.copy())
         trajectory["actions"].append(action.copy())
         trajectory["rewards"].append(reward)
+        trajectory["dones"].append(done)
 
         if done:
             obs = env.reset()
@@ -58,19 +61,24 @@ def main() -> None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Loading PPO model from {args.model} on {device}")
         agent = PPOAgent(state_dim=env.obs_dim, action_dim=env.action_dim, device=device)
-        agent.load(args.model)
+        checkpoint = agent.load(args.model)
         policy = agent.get_policy()
+        if "env_kwargs" in checkpoint:
+            # evaluate in the same environment configuration used for training
+            env = HumanoidEnv(render=False, **checkpoint["env_kwargs"])
+            print(f"Environment config from checkpoint: {checkpoint['env_kwargs']}")
     else:
         print("Using RandomPolicy")
         policy = RandomPolicy(env.action_dim)
 
     traj = run_rollout(env, policy, max_steps=args.steps)
-    np.savez(args.output, **traj)
+    os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+    np.savez(args.output, dt=env.dt, **traj)
     print(f"Rollout saved to {args.output}")
     print(f"Trajectory keys: {list(traj.keys())}")
     print(f"Trajectory lengths: {[len(traj[k]) for k in traj.keys()]}")
-    print(f"dt_sim={env.model.opt.timestep:.6f}s")
-    print(f"Total steps: {args.steps}, Total time: {args.steps * env.model.opt.timestep:.2f}s")
+    print(f"dt_sim={env.model.opt.timestep:.6f}s, dt_control={env.dt:.6f}s")
+    print(f"Total steps: {args.steps}, Total time: {args.steps * env.dt:.2f}s")
 
 if __name__ == "__main__":
     main()
