@@ -34,6 +34,18 @@ These directories are generated during usage:
 
 ---
 
+## Docker
+
+All dependencies (MuJoCo, CPU-only PyTorch, numpy, pandas, matplotlib) are installed in the container defined by `Dockerfile` / `docker-compose.yml`. The repo is mounted at `/workspace/drl`.
+
+```bash
+xhost +local:docker               # only needed for GUI scripts (X11)
+docker compose up -d --build
+docker compose exec drl bash      # then run the scripts below
+```
+
+---
+
 ## Test MuJoCo
 
 To check that everything works:

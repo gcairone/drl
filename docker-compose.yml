@@ -1,0 +1,27 @@
+services:
+  drl:
+    build:
+      context: .
+      network: host   # bridge DNS is broken on the dev machine
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    image: drl-mujoco:latest
+    container_name: drl-mujoco
+    cpus: 2
+    mem_limit: 2g
+    memswap_limit: 2g     # no swap beyond the 2 GB
+    environment:
+      - DISPLAY=${DISPLAY:-}
+      - QT_X11_NO_MITSHM=1
+      - LIBGL_ALWAYS_SOFTWARE=1       # software OpenGL
+      - MESA_GL_VERSION_OVERRIDE=3.3
+      - MUJOCO_GL=egl
+      - OMP_NUM_THREADS=2             # match the cpu limit (torch sees all host cores otherwise)
+      - MKL_NUM_THREADS=2
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - .:/workspace/drl:rw
+    working_dir: /workspace/drl
+    tty: true
+    stdin_open: true
