@@ -34,6 +34,29 @@ These directories are generated during usage:
 
 ---
 
+### Checkpoint policy
+
+Training checkpoints (`results/`, `checkpoints/`) are **not versioned** (see `.gitignore`). Only the best one is, in `pretrained/`:
+
+*   `pretrained/best.pth`: the best checkpoint so far (full PPO checkpoint: usable with `rollout`, `eval_policy` and `train --resume`).
+*   `pretrained/best.json`: where it came from and its metrics.
+
+To submit a new checkpoint for promotion:
+
+```bash
+python3 -m scripts.promote_best --candidate results/checkpoints/model_epoch_N.pth
+```
+
+It evaluates the candidate **and** the current best under the same fixed protocol (100 episodes, deterministic actions, reset noise 0.01, cap 3000 steps = 45 s, seed 12345) and replaces `best.pth` only if the candidate has a strictly higher mean standing time. Then commit `pretrained/`.
+
+To evaluate checkpoints in more detail (stochastic mode, robustness to reset noise, survival rate):
+
+```bash
+python3 -m scripts.eval_policy --model pretrained/best.pth --episodes 100
+```
+
+---
+
 ## Docker
 
 All dependencies (MuJoCo, CPU-only PyTorch, numpy, pandas, matplotlib) are installed in the container defined by `Dockerfile` / `docker-compose.yml`. The repo is mounted at `/workspace/drl`.

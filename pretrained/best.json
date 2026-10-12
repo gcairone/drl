@@ -1,0 +1,19 @@
+{
+  "source": "results/run5/checkpoints/2026-10-12_15-30-14/model_epoch_1440.pth",
+  "promoted_at": "2026-10-12T15:51:26",
+  "protocol": {
+    "episodes": 100,
+    "max_steps": 3000,
+    "noise": 0.01,
+    "seed": 12345,
+    "mode": "deterministic"
+  },
+  "metrics": {
+    "epoch": 1440,
+    "mean_standing_time": 27.139,
+    "sem": 0.533,
+    "median": 27.953,
+    "survival": 0.0,
+    "return": 2131.0
+  }
+}

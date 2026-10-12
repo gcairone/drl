@@ -12,6 +12,16 @@ from agents.ppo import PPOAgent
 from envs.humanoid_env import HumanoidEnv
 
 
+def load_agent(path: str):
+    """Loads a PPO checkpoint in eval mode. Returns (agent, checkpoint dict, env_kwargs)."""
+    probe = HumanoidEnv(render=False)
+    agent = PPOAgent(state_dim=probe.obs_dim, action_dim=probe.action_dim, device="cpu")
+    ckpt = agent.load(path)
+    agent.actor.eval()
+    agent.critic.eval()
+    return agent, ckpt, ckpt.get("env_kwargs", {})
+
+
 def run_episodes(agent: PPOAgent, env_kwargs: Dict, noise_scale: float, stochastic: bool,
                  episodes: int, max_steps: int, seed: int) -> Dict[str, np.ndarray]:
     """
@@ -85,12 +95,7 @@ def main() -> None:
     torch.set_num_threads(1)
     for path in args.model:
         torch.manual_seed(args.seed)
-        probe = HumanoidEnv(render=False)
-        agent = PPOAgent(state_dim=probe.obs_dim, action_dim=probe.action_dim, device="cpu")
-        ckpt = agent.load(path)
-        agent.actor.eval()
-        agent.critic.eval()
-        env_kwargs = ckpt.get("env_kwargs", {})
+        agent, ckpt, env_kwargs = load_agent(path)
 
         print(f"\n=== {path}  (epoch {ckpt.get('epoch', '?')}, env {env_kwargs})")
         print(f"{'mode':5s} {'noise':>6s} | {'mean±sem [s]':>14s} {'std':>5s} {'med':>6s} {'p10':>6s} {'min':>6s} | "
