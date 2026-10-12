@@ -93,6 +93,28 @@ python3 -m scripts.train
 * Saves checkpoints in `models/`
 * Logs metrics via `utils/logger.py` in `log/`
 
+### Robustness training
+
+By default training uses an **adaptive curriculum** over a single *difficulty* level in [0, 1] (`--no-curriculum --difficulty D` keeps it fixed). At difficulty 0 the environment is the plain one. The level rises by `--curr_step` when at least `--curr_up` of the recent episodes survive the whole time limit, falls when fewer than `--curr_down` do, and is stored in the checkpoints (`--resume` continues from it). Each episode draws its own intensity `difficulty * U(0, 1)`, so the policy keeps seeing easy and hard cases. The intensity scales every amplitude below (maximum values at difficulty 1, set with the option of the same name):
+
+| Group | Option | Max amplitude |
+|---|---|---|
+| Reset | `--rand_tilt` | 0.15 rad root tilt (roll/pitch) |
+| | `--rand_joint_pos` | 0.10 rad joint offsets (redrawn if limbs would start inside each other) |
+| | `--rand_vel` | 0.30 initial velocities |
+| Domain randomization (per episode) | `--dr_mass` / `--dr_gear` | ±50% link masses (with inertia) / actuator strengths |
+| | `--dr_friction` | ±70% friction (one factor for all geoms) |
+| | `--dr_damping` | ±100% joint damping |
+| | `--obs_noise` | 0.02 std noise on positions (x10 on velocities) |
+| Pushes (during the episode) | `--push_force` | 150 N on the torso, random horizontal direction |
+| | `--push_interval`, `--push_duration` | every 3 s on average (exponential), 0.1 s long |
+
+`--log_std_min` (default -1.2) floors the log standard deviation of the policy: without it the policy collapsed to a near-deterministic one, and its PPO updates became erratic (KL spikes). Use `-inf` to disable it.
+
+The CSV and the console also report `Diff` (level), `Succ` (share of finished episodes that survived) and `Eps` (episodes finished in the epoch: when 0, `Ret` and `Len` read 0 because episodes outlast an epoch). The observation contains the absolute heading and position of the root, so the start heading and position are *not* randomized; doing so needs a heading-invariant observation.
+
+Checks of the randomization, curriculum and `log_std` floor: `python3 -m scripts.test_randomization`. To measure robustness: `python3 -m scripts.eval_policy --model <ckpt> --difficulty 0 0.3 0.5` (exact intensity, no random amplitude).
+
 ---
 
 ### Generate trajectories

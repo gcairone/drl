@@ -15,11 +15,11 @@ BEST_CKPT = "best.pth"
 BEST_META = "best.json"
 
 
-def evaluate(path: str, episodes: int, max_steps: int, noise: float, seed: int) -> dict:
+def evaluate(path: str, episodes: int, max_steps: int, noise: float, seed: int, difficulty: float = 0.0) -> dict:
     """Deterministic evaluation under the fixed promotion protocol."""
     torch.manual_seed(seed)
     agent, ckpt, env_kwargs = load_agent(path)
-    res = run_episodes(agent, env_kwargs, noise, False, episodes, max_steps, seed)
+    res = run_episodes(agent, env_kwargs, noise, False, episodes, max_steps, seed, difficulty)
     s = summarize(res, max_steps)
     return {"epoch": ckpt.get("epoch"), "mean_standing_time": round(float(s["mean"]), 3),
             "sem": round(float(s["sem"]), 3), "median": round(float(s["median"]), 3),
@@ -35,21 +35,22 @@ def main() -> None:
     parser.add_argument("--max_steps", type=int, default=9000, help="Episode cap (control steps, 9000 = 135 s); long enough not to saturate")
     parser.add_argument("--noise", type=float, default=0.01, help="Reset noise scale")
     parser.add_argument("--seed", type=int, default=12345)
+    parser.add_argument("--difficulty", type=float, default=0.0, help="Randomization level of the evaluation (0: plain environment)")
     args = parser.parse_args()
 
     protocol = {"episodes": args.episodes, "max_steps": args.max_steps, "noise": args.noise,
-                "seed": args.seed, "mode": "deterministic"}
+                "seed": args.seed, "mode": "deterministic", "difficulty": args.difficulty}
     best_path = os.path.join(args.best_dir, BEST_CKPT)
     meta_path = os.path.join(args.best_dir, BEST_META)
 
-    cand = evaluate(args.candidate, args.episodes, args.max_steps, args.noise, args.seed)
+    cand = evaluate(args.candidate, args.episodes, args.max_steps, args.noise, args.seed, args.difficulty)
     print(f"candidate {args.candidate}: {cand}")
 
     promote = True
     if os.path.isfile(best_path):
         # re-evaluate the current best under the same protocol, so the comparison stays fair
         # even if the environment or the evaluation changed since it was promoted
-        best = evaluate(best_path, args.episodes, args.max_steps, args.noise, args.seed)
+        best = evaluate(best_path, args.episodes, args.max_steps, args.noise, args.seed, args.difficulty)
         print(f"current best {best_path}: {best}")
         promote = cand["mean_standing_time"] > best["mean_standing_time"]
 

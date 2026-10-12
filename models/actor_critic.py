@@ -10,20 +10,33 @@ class GaussianActor(nn.Module):
     Gaussian Actor for continuous action spaces.
     Predicts mean and standard deviation for a Normal distribution.
     """
-    def __init__(self, state_dim: int, action_dim: int, hidden_layers: List[int] = [64, 64], activation: Type[nn.Module] = nn.ReLU, log_std_init: float = -0.5) -> None:
+    def __init__(self, state_dim: int, action_dim: int, hidden_layers: List[int] = [64, 64], activation: Type[nn.Module] = nn.ReLU, log_std_init: float = -0.5, log_std_min: Optional[float] = None) -> None:
+        """
+        Args:
+            log_std_min (Optional[float]): Lower bound of the log standard deviation of every action dimension
+                                           (None: unbounded). Keeps the policy from collapsing to a near-deterministic
+                                           one, whose PPO updates become very sensitive.
+        """
         super().__init__()
         self.mean_net = BaseDNN(state_dim, action_dim, hidden_layers, activation)
         
         self.log_std = nn.Parameter(torch.ones(action_dim) * log_std_init)
+        self.log_std_min = log_std_min
         # replaced by a RunningObsNormalizer (shared with the critic) when observation normalization is on
         self.obs_norm: nn.Module = nn.Identity()
+
+    def _log_std(self) -> torch.Tensor:
+        """Log standard deviation actually used, i.e. the parameter floored at log_std_min."""
+        if self.log_std_min is None:
+            return self.log_std
+        return self.log_std.clamp(min=self.log_std_min)
 
     def _distribution(self, state: torch.Tensor) -> Normal:
         """
         Creates the Normal distribution given the state.
         """
         mu = self.mean_net(self.obs_norm(state))
-        std = torch.exp(self.log_std)
+        std = torch.exp(self._log_std())
         return Normal(mu, std, validate_args=False)
 
     def sample(self, state: torch.Tensor, deterministic: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -40,8 +53,9 @@ class GaussianActor(nn.Module):
         """
         mu = self.mean_net(self.obs_norm(state))
         noise = torch.zeros_like(mu) if deterministic else torch.randn_like(mu)
-        action = mu + torch.exp(self.log_std) * noise
-        log_prob = (-0.5 * noise.pow(2) - self.log_std - 0.5 * math.log(2 * math.pi)).sum(-1)
+        log_std = self._log_std()
+        action = mu + torch.exp(log_std) * noise
+        log_prob = (-0.5 * noise.pow(2) - log_std - 0.5 * math.log(2 * math.pi)).sum(-1)
         return action, log_prob
 
     def forward(self, state: torch.Tensor, deterministic: bool = True, with_logprob: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:

@@ -23,17 +23,19 @@ def load_agent(path: str):
 
 
 def run_episodes(agent: PPOAgent, env_kwargs: Dict, noise_scale: float, stochastic: bool,
-                 episodes: int, max_steps: int, seed: int) -> Dict[str, np.ndarray]:
+                 episodes: int, max_steps: int, seed: int, difficulty: float = 0.0) -> Dict[str, np.ndarray]:
     """
     Runs `episodes` independent episodes in lockstep (one fresh env each, different seeds),
     with one batched forward pass per step over the envs still alive.
+    `difficulty` is the randomization level, applied at its exact value (see HumanoidEnv.set_difficulty).
 
     Returns:
         Dict with 'steps' (episode length per env), 'ret' (undiscounted return per env)
         and 'fell' (True if the episode ended by termination, False if it reached max_steps).
     """
     kwargs = dict(env_kwargs, noise_scale=noise_scale)
-    envs = [HumanoidEnv(render=False, seed=seed + i, **kwargs) for i in range(episodes)]
+    envs = [HumanoidEnv(render=False, seed=seed + i, difficulty=difficulty, random_amplitude=False, **kwargs)
+            for i in range(episodes)]
     obs = np.stack([env.reset() for env in envs])
 
     steps = np.zeros(episodes, dtype=np.int64)
@@ -87,6 +89,8 @@ def main() -> None:
     parser.add_argument("--max_steps", type=int, default=1000, help="Episode cap in control steps")
     parser.add_argument("--noise", type=float, nargs="+", default=[0.01, 0.05, 0.1],
                         help="Reset noise scales to test (training value is the first column of interest)")
+    parser.add_argument("--difficulty", type=float, nargs="+", default=[0.0],
+                        help="Randomization levels in [0, 1] to test (resets, domain randomization, pushes); 0 is the plain environment")
     parser.add_argument("--modes", type=str, nargs="+", default=["det", "stoch"], choices=["det", "stoch"],
                         help="det = mean action, stoch = sampled actions as in training")
     parser.add_argument("--seed", type=int, default=12345, help="Base seed (envs use seed+i); disjoint from training seeds")
@@ -98,13 +102,14 @@ def main() -> None:
         agent, ckpt, env_kwargs = load_agent(path)
 
         print(f"\n=== {path}  (epoch {ckpt.get('epoch', '?')}, env {env_kwargs})")
-        print(f"{'mode':5s} {'noise':>6s} | {'mean±sem [s]':>14s} {'std':>5s} {'med':>6s} {'p10':>6s} {'min':>6s} | "
+        print(f"{'mode':5s} {'noise':>6s} {'diff':>5s} | {'mean±sem [s]':>14s} {'std':>5s} {'med':>6s} {'p10':>6s} {'min':>6s} | "
               f"{'survive cap':>11s} {'95% CI':>13s} | {'return':>7s}")
         for noise in args.noise:
+          for difficulty in args.difficulty:
             for mode in args.modes:
-                res = run_episodes(agent, env_kwargs, noise, mode == "stoch", args.episodes, args.max_steps, args.seed)
+                res = run_episodes(agent, env_kwargs, noise, mode == "stoch", args.episodes, args.max_steps, args.seed, difficulty)
                 s = summarize(res, args.max_steps)
-                print(f"{mode:5s} {noise:6.2f} | {s['mean']:6.2f}±{s['sem']:5.2f}   {s['std']:5.2f} {s['median']:6.2f} "
+                print(f"{mode:5s} {noise:6.2f} {difficulty:5.2f} | {s['mean']:6.2f}±{s['sem']:5.2f}   {s['std']:5.2f} {s['median']:6.2f} "
                       f"{s['p10']:6.2f} {s['min']:6.2f} | {s['surv']:11.0%} [{s['surv_lo']:.2f},{s['surv_hi']:.2f}] | {s['ret']:7.1f}",
                       flush=True)
         print(f"(cap = {s['cap']:.1f} s, {args.episodes} episodes per row)")

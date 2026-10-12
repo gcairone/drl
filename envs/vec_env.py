@@ -29,6 +29,14 @@ class VecHumanoidEnv:
         """
         return np.stack([env.reset() for env in self.envs])
 
+    def set_difficulty(self, difficulty: float, random_amplitude: bool = True) -> None:
+        """
+        Sets the randomization level of every environment (see HumanoidEnv.set_difficulty).
+        It takes effect from each environment's next reset.
+        """
+        for env in self.envs:
+            env.set_difficulty(difficulty, random_amplitude)
+
     def reset_at(self, i: int) -> np.ndarray:
         """
         Resets environment i.
