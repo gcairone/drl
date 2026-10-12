@@ -1,19 +1,19 @@
 {
-  "source": "results/run5/checkpoints/2026-10-12_15-30-14/model_epoch_1440.pth",
-  "promoted_at": "2026-10-12T15:51:26",
+  "source": "results/run6/checkpoints/2026-10-12_16-10-08/model_epoch_2940.pth",
+  "promoted_at": "2026-10-12T16:48:53",
   "protocol": {
     "episodes": 100,
-    "max_steps": 3000,
+    "max_steps": 9000,
     "noise": 0.01,
     "seed": 12345,
     "mode": "deterministic"
   },
   "metrics": {
-    "epoch": 1440,
-    "mean_standing_time": 27.139,
-    "sem": 0.533,
-    "median": 27.953,
+    "epoch": 2940,
+    "mean_standing_time": 60.413,
+    "sem": 0.883,
+    "median": 60.067,
     "survival": 0.0,
-    "return": 2131.0
+    "return": 4902.3
   }
 }

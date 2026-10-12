@@ -32,7 +32,7 @@ def main() -> None:
     parser.add_argument("--candidate", type=str, required=True, help="Checkpoint to consider")
     parser.add_argument("--best_dir", type=str, default="pretrained", help="Versioned folder holding the best checkpoint")
     parser.add_argument("--episodes", type=int, default=100)
-    parser.add_argument("--max_steps", type=int, default=3000, help="Episode cap (control steps); long enough not to saturate")
+    parser.add_argument("--max_steps", type=int, default=9000, help="Episode cap (control steps, 9000 = 135 s); long enough not to saturate")
     parser.add_argument("--noise", type=float, default=0.01, help="Reset noise scale")
     parser.add_argument("--seed", type=int, default=12345)
     args = parser.parse_args()

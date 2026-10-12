@@ -47,7 +47,7 @@ To submit a new checkpoint for promotion:
 python3 -m scripts.promote_best --candidate results/checkpoints/model_epoch_N.pth
 ```
 
-It evaluates the candidate **and** the current best under the same fixed protocol (100 episodes, deterministic actions, reset noise 0.01, cap 3000 steps = 45 s, seed 12345) and replaces `best.pth` only if the candidate has a strictly higher mean standing time. Then commit `pretrained/`.
+It evaluates the candidate **and** the current best under the same fixed protocol (100 episodes, deterministic actions, reset noise 0.01, cap 9000 steps = 135 s, seed 12345) and replaces `best.pth` only if the candidate has a strictly higher mean standing time. Then commit `pretrained/`.
 
 To evaluate checkpoints in more detail (stochastic mode, robustness to reset noise, survival rate):
 
