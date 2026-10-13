@@ -5,6 +5,7 @@ from datetime import datetime
 import numpy as np
 import torch
 from envs.humanoid_env import RANDOMIZATION_DEFAULTS
+from envs.registry import DEFAULT_HIDDEN, DEFAULT_LOG_STD, TASK_PARAMS, env_class
 from envs.vec_env import VecHumanoidEnv
 from agents.ppo import PPOAgent
 from utils.buffer import PPOBuffer
@@ -33,7 +34,23 @@ def train(args):
 
     env_kwargs = dict(noise_scale=args.noise_scale, min_height=args.min_height, term_height=args.term_height, frame_skip=args.frame_skip)
     env_kwargs.update({k: getattr(args, k) for k in RANDOMIZATION_DEFAULTS})
-    envs = VecHumanoidEnv(args.num_envs, seed=args.seed, render=False, **env_kwargs)
+
+    # a checkpoint fixes the task and the network it was trained with
+    hidden = tuple(args.hidden) if args.hidden else DEFAULT_HIDDEN[args.task]
+    if args.resume and os.path.isfile(args.resume):
+        arch = torch.load(args.resume, map_location="cpu", weights_only=False).get("arch") or {}
+        if arch and (arch["task"], tuple(arch["hidden_layers"])) != (args.task, hidden):
+            print(f"Using the task '{arch['task']}' and the network {list(arch['hidden_layers'])} of the checkpoint.")
+            args.task, hidden = arch["task"], tuple(arch["hidden_layers"])
+    env_kwargs.update({k: getattr(args, k) for k in TASK_PARAMS[args.task]})
+    log_std_init, log_std_min = DEFAULT_LOG_STD[args.task]
+    if args.log_std_init is not None:
+        log_std_init = args.log_std_init
+    if args.log_std_min is not None:
+        log_std_min = args.log_std_min
+    envs = VecHumanoidEnv(args.num_envs, seed=args.seed, env_cls=env_class(args.task), render=False, **env_kwargs)
+    stat_keys = envs.envs[0].STAT_KEYS
+    print(f"Task: {args.task} | observation {envs.obs_dim} | action {envs.action_dim} | network {list(hidden)}")
     obs_dim = envs.obs_dim
     action_dim = envs.action_dim
 
@@ -52,7 +69,9 @@ def train(args):
         target_kl=args.target_kl,
         device=str(device),
         obs_norm=args.obs_norm,
-        log_std_min=args.log_std_min if np.isfinite(args.log_std_min) else None
+        log_std_min=log_std_min if np.isfinite(log_std_min) else None,
+        hidden_layers=hidden,
+        log_std_init=log_std_init
     )
 
     # randomization level: adaptive curriculum, or a fixed level with --no-curriculum
@@ -100,6 +119,7 @@ def train(args):
     ep_returns = []
     ep_lengths = []
     ep_success = []
+    ep_stats = {k: [] for k in stat_keys}
 
     for epoch in range(start_epoch, args.epochs):
         epoch_start = time.time()
@@ -134,8 +154,12 @@ def train(args):
                 if done[i] or timeout[i]:
                     ep_returns.append(ep_ret[i])
                     ep_lengths.append(ep_len[i])
-                    ep_success.append(not done[i])  # reached the time limit without falling
-                    curriculum.record(not done[i])
+                    success = envs.envs[i].episode_success(bool(done[i]))
+                    ep_success.append(success)
+                    curriculum.record(success)
+                    stats = envs.envs[i].episode_stats()
+                    for k in stat_keys:
+                        ep_stats[k].append(stats[k])
                     
                     obs[i] = envs.reset_at(i)
                     ep_ret[i], ep_len[i] = 0.0, 0
@@ -153,6 +177,8 @@ def train(args):
         ep_returns = [] # Reset for next epoch logging
         ep_lengths = []
         ep_success = []
+        task_stats = {f"S_{k}": (float(np.mean(v)) if v else float("nan")) for k, v in ep_stats.items()}
+        ep_stats = {k: [] for k in stat_keys}
 
         # difficulty used during this epoch is logged; a change applies from the next episode resets on
         difficulty = curriculum.level
@@ -173,6 +199,7 @@ def train(args):
             "Eps": n_episodes,
             "Succ": success_rate,
             "Diff": difficulty,
+            **task_stats,
             "Time": time.time() - start_time,
             "SPS": args.steps_per_epoch / (rollout_time + update_time),
             "TRollout": rollout_time,
@@ -188,15 +215,21 @@ def train(args):
               f"KL: {epoch_metrics['KL']:.4f} | "
               f"SPS: {epoch_metrics['SPS']:.0f} | "
               f"Time: {epoch_metrics['Time']:.0f}s | "
-              f"Diff: {epoch_metrics['Diff']:.2f} | Succ: {epoch_metrics['Succ']:.2f}")
+              f"Diff: {epoch_metrics['Diff']:.2f} | Succ: {epoch_metrics['Succ']:.2f}"
+              + (f" | Spd: {task_stats['S_speed']:.2f}/{task_stats['S_v_target']:.2f}" if stat_keys else ""))
 
         if (epoch + 1) % args.save_freq == 0:
             save_path = os.path.join(model_save_dir, f"model_epoch_{epoch+1}.pth")
-            agent.save(save_path, epoch=epoch+1, buffer=buffer.state_dict(), env_kwargs=env_kwargs, curriculum=curriculum.state_dict())
+            agent.save(save_path, epoch=epoch+1, buffer=buffer.state_dict(), env_kwargs=env_kwargs, curriculum=curriculum.state_dict(),
+                       arch=dict(task=args.task, hidden_layers=list(hidden)))
             print(f"Model saved to {save_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--task", type=str, default="stand", choices=sorted(TASK_PARAMS),
+                        help="stand: stay upright; run: run along a commanded direction at a commanded speed")
+    parser.add_argument("--hidden", type=int, nargs="+", default=None,
+                        help="Hidden layer sizes of actor and critic (default: 64 64 for stand, 256 256 for run)")
     parser.add_argument("--steps_per_epoch", type=int, default=2048)
     parser.add_argument("--epochs", type=int, default=500)
     parser.add_argument("--max_ep_len", type=int, default=1000)
@@ -218,8 +251,10 @@ if __name__ == "__main__":
     parser.add_argument("--term_height", type=float, default=1.0, help="Torso height below which the episode terminates")
     parser.add_argument("--frame_skip", type=int, default=3, help="Physics steps per action")
     parser.add_argument("--obs_norm", action=argparse.BooleanOptionalAction, default=True, help="Normalize observations with running mean/std")
-    parser.add_argument("--log_std_min", type=float, default=-1.2,
-                        help="Floor of the actor's log standard deviation (-inf: no floor)")
+    parser.add_argument("--log_std_min", type=float, default=None,
+                        help="Floor of the actor's log standard deviation (-inf: no floor; default -1.2 for stand, -1.6 for run)")
+    parser.add_argument("--log_std_init", type=float, default=None,
+                        help="Initial log standard deviation of the actor (default -0.5 for stand, -1.0 for run)")
     parser.add_argument("--curriculum", action=argparse.BooleanOptionalAction, default=True,
                         help="Adapt the randomization difficulty to the success rate (--no-curriculum: keep --difficulty fixed)")
     parser.add_argument("--difficulty", type=float, default=0.0,
@@ -230,6 +265,9 @@ if __name__ == "__main__":
     parser.add_argument("--curr_min_episodes", type=int, default=20, help="Curriculum: finished episodes needed for each decision")
     for name, default in RANDOMIZATION_DEFAULTS.items():
         parser.add_argument(f"--{name}", type=float, default=default, help=f"Randomization amplitude at difficulty 1 (default {default})")
+    for task, params in TASK_PARAMS.items():
+        for name, default in params.items():
+            parser.add_argument(f"--{name}", type=float, default=default, help=f"[{task}] task parameter (default {default})")
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume from")
     args = parser.parse_args()
     

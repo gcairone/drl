@@ -291,11 +291,19 @@ class HumanoidEnv:
         """
         action = np.asarray(action, dtype=np.float32)
         action = np.clip(action, -1.0, 1.0)
-        self.data.ctrl[:] = action
+        self._set_action(action)
         self._update_push()
         for _ in range(self.frame_skip):
+            self._apply_control()
             mujoco.mj_step(self.model, self.data)
         return self._observe_step(action)
+
+    def _set_action(self, action: np.ndarray) -> None:
+        """Called once per control step with the clipped action: by default the action is the motor control."""
+        self.data.ctrl[:] = action
+
+    def _apply_control(self) -> None:
+        """Called before every physics substep (override to compute the motor control from the state)."""
 
     def _observe_step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
         """Observation, reward, termination and info after the physics of a control step (override per task)."""

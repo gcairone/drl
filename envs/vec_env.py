@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Dict, Any, List
+from typing import Optional, Tuple, Dict, Any, List, Type
 import numpy as np
 from envs.humanoid_env import HumanoidEnv
 
@@ -11,9 +11,10 @@ class VecHumanoidEnv:
     bootstrap on the last observation first.
     """
 
-    def __init__(self, num_envs: int, seed: Optional[int] = None, **env_kwargs: Any) -> None:
+    def __init__(self, num_envs: int, seed: Optional[int] = None, env_cls: Type[HumanoidEnv] = HumanoidEnv,
+                 **env_kwargs: Any) -> None:
         self.envs = [
-            HumanoidEnv(seed=None if seed is None else seed + i, **env_kwargs)
+            env_cls(seed=None if seed is None else seed + i, **env_kwargs)
             for i in range(num_envs)
         ]
         self.num_envs = num_envs

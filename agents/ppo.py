@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Sequence, Tuple
 import torch
 import torch.nn as nn
 import numpy as np
@@ -8,7 +8,7 @@ from models.actor_critic import GaussianActor, Critic
 from models.normalizer import RunningObsNormalizer
 
 class PPOAgent(BaseAgent):
-    def __init__(self, state_dim: int, action_dim: int, lr: float = 3e-4, gamma: float = 0.99, clip_ratio: float = 0.2, update_epochs: int = 10, minibatch_size: int = 64, max_grad_norm: float = 0.5, target_kl: float = 0.01, device: str = 'cpu', obs_norm: bool = False, log_std_min: Optional[float] = None) -> None:
+    def __init__(self, state_dim: int, action_dim: int, lr: float = 3e-4, gamma: float = 0.99, clip_ratio: float = 0.2, update_epochs: int = 10, minibatch_size: int = 64, max_grad_norm: float = 0.5, target_kl: float = 0.01, device: str = 'cpu', obs_norm: bool = False, log_std_min: Optional[float] = None, hidden_layers: Sequence[int] = (64, 64), log_std_init: float = -0.5) -> None:
         """
         Args:
             update_epochs (int): Passes over the collected batch in each update.
@@ -17,6 +17,8 @@ class PPOAgent(BaseAgent):
             target_kl (float): Stops the update early when the KL to the old policy exceeds
                                1.5 * target_kl after a pass (<= 0 disables it).
             log_std_min (Optional[float]): Floor of the actor's log standard deviation (None: no floor).
+            hidden_layers (Sequence[int]): Sizes of the hidden layers of the actor and of the critic.
+            log_std_init (float): Initial log standard deviation of the actor.
         """
         super().__init__(state_dim, action_dim, device)
         
@@ -28,8 +30,9 @@ class PPOAgent(BaseAgent):
         self.target_kl = target_kl
         
         self.log_std_min = log_std_min
-        self.actor = GaussianActor(state_dim, action_dim, log_std_min=log_std_min).to(device)
-        self.critic = Critic(state_dim).to(device)
+        self.hidden_layers = list(hidden_layers)
+        self.actor = GaussianActor(state_dim, action_dim, hidden_layers=self.hidden_layers, log_std_init=log_std_init, log_std_min=log_std_min).to(device)
+        self.critic = Critic(state_dim, hidden_layers=self.hidden_layers).to(device)
         self.obs_normalizer = None
         if obs_norm:
             self._attach_obs_normalizer()

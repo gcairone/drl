@@ -55,6 +55,32 @@ To evaluate checkpoints in more detail (stochastic mode, robustness to reset noi
 python3 -m scripts.eval_policy --model pretrained/best.pth --episodes 100
 ```
 
+### Running task
+
+`--task run` trains the humanoid to run along a commanded direction at a commanded speed (`--task stand`, the default, is the standing task above). It is a separate task with its own observation, reward and curriculum (`envs/run_env.py`):
+
+* **Command**: per episode a speed `v*` (0 to 3.5 m/s) and a heading offset `phi` from the initial facing direction. The command is part of the observation, so one policy runs at any speed and direction.
+* **Observation** (76 values): torso height, gravity direction, centre-of-mass velocity and angular velocity in the torso frame, joint angles and velocities, the previous action, and the command. No absolute position or heading: it does not grow with the distance covered and the policy cannot depend on where it is.
+* **Actions**: target joint angles tracked by a PD controller (`--pd_control 0` for raw torques). With raw torques the policy learned to fall forward at the commanded speed instead of balancing.
+* **Reward** per step: `w_alive` + `w_vel`*exp(-((v_par - v*)/sigma)^2) + `w_prog`*clip(v_par/v*, 0, 1) + `w_head`*(1 + cos(heading error))/2 + `w_up`*exp(-(tilt/0.5)^2) - `w_lat`*v_perp^2 - `w_ctrl`*|u|^2 - `w_rate`*|a - a_prev|^2, with `v_par`/`v_perp` the body velocity along/across the command. All weights are options of `train` (`--w_vel`, ...). The episode ends if the torso drops below `--fall_height` (0.8 m) or tilts beyond `--fall_tilt` (1 rad).
+* **Domain randomization and pushes**: those of the standing task (reset randomization, masses, friction, actuator strength, damping, observation noise, random pushes on the torso).
+* **Curriculum**: one level in [0, 1], raised when at least 70% of the recent episodes succeed (they do not fall *and* reach 70% of the commanded speed on average) and lowered below 30%. It drives, one after the other: (1) an **assist**, a stabilizing torque on the torso plus an upward force carrying 90% of the weight, full at level 0 and gone at 0.25 (`--assist_end`); (2) the upper bound of the commanded speed, from 0.5 m/s at level 0.1 to `--run_speed` (3.5 m/s) at 0.7; (3) the heading offset, up to `--run_heading` (0.8 rad) from level 0.4; (4) the randomization and pushes, from level 0.5.
+
+Recommended training (8 environments, larger batches and a 256x256 network are the defaults for this task):
+
+```bash
+python3 -m scripts.train --task run --num_envs 8 --steps_per_epoch 8192 --minibatch_size 512 \
+    --epochs 540 --save_freq 60 --save_dir results/run/checkpoints --log_path results/run/logs
+```
+
+The log adds `S_speed`, `S_v_target`, `S_assist`, `S_lat`, `S_head_err`, `S_tilt` and the reward terms (means over the episodes finished in the epoch). To evaluate a checkpoint under a fixed command and fixed perturbations (no assist):
+
+```bash
+python3 -m scripts.eval_run --model <ckpt> --speeds 1 2 3 --headings 0 0.5 --perturbation 0 0.5
+```
+
+Checks: `python3 -m scripts.test_run_env`. `promote_best` and the `pretrained/` folder are for the standing task.
+
 ---
 
 ## Docker
