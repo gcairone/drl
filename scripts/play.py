@@ -21,6 +21,9 @@ def replay_trajectory(env: HumanoidEnv, trajectory: Dict[str, np.ndarray], fps: 
     viewer = env.render_init_passive()
     n_steps = len(trajectory["qpos"])
 
+    frame_t = 1 / fps
+    next_t = time.perf_counter()
+
     for i in range(0, n_steps, skip):
         qpos = trajectory["qpos"][i]
         qvel = trajectory["qvel"][i]
@@ -33,9 +36,16 @@ def replay_trajectory(env: HumanoidEnv, trajectory: Dict[str, np.ndarray], fps: 
         if "rewards" in trajectory:
             msg += f", reward={trajectory['rewards'][i]:.4f}"
         
-        print(msg)
+        if (i // skip) % fps == 0:
+            print(msg)
 
-        time.sleep(1 / fps)  
+        # keep real-time pace: sleep only for what the rendering did not already take
+        next_t += frame_t
+        delay = next_t - time.perf_counter()
+        if delay > 0:
+            time.sleep(delay)
+        else:
+            next_t = time.perf_counter()
 
         if not viewer.is_running():
             print("[INFO] Viewer closed by user")

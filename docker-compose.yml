@@ -14,7 +14,6 @@ services:
     environment:
       - DISPLAY=${DISPLAY:-}
       - QT_X11_NO_MITSHM=1
-      - LIBGL_ALWAYS_SOFTWARE=1       # software OpenGL
       - MESA_GL_VERSION_OVERRIDE=3.3
       - MUJOCO_GL=egl
       - OMP_NUM_THREADS=2             # match the cpu limit (torch sees all host cores otherwise)
@@ -23,5 +22,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - .:/workspace/drl:rw
     working_dir: /workspace/drl
+    devices:
+      - /dev/dri:/dev/dri             # GPU-accelerated OpenGL for the GUI
     tty: true
     stdin_open: true
