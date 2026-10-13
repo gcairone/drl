@@ -295,11 +295,26 @@ class HumanoidEnv:
         self._update_push()
         for _ in range(self.frame_skip):
             mujoco.mj_step(self.model, self.data)
+        return self._observe_step(action)
+
+    def _observe_step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
+        """Observation, reward, termination and info after the physics of a control step (override per task)."""
         obs = self._get_obs()
         reward = self._compute_reward()
         done = self._is_done()
         info = {}
         return obs, reward, done, info
+
+    # statistics of the episode that just ended and its outcome, read by the trainer before the next reset()
+    STAT_KEYS: Tuple[str, ...] = ()
+
+    def episode_stats(self) -> Dict[str, float]:
+        """Task-specific statistics of the current episode (keys listed in STAT_KEYS)."""
+        return {}
+
+    def episode_success(self, fell: bool) -> bool:
+        """Whether the current episode counts as a success for the curriculum."""
+        return not fell
 
     def _get_obs(self) -> np.ndarray:
         obs = np.concatenate([self.data.qpos, self.data.qvel]).astype(np.float32)
