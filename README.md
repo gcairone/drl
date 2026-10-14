@@ -151,6 +151,15 @@ python3 -m scripts.rollout
 
 This saves trajectories (`qpos` and `qvel`) to a `.npz` file in `data/`
 
+### Record a GIF
+
+```bash
+python3 -m scripts.make_gif --model pretrained/best.pth --seconds 6 --out results/gifs/stand.gif
+python3 -m scripts.make_gif --model <running ckpt> --speed 0.6 --assist 0.3 --out results/gifs/run.gif
+```
+
+Works for the checkpoints of both tasks with no display: MuJoCo renders offscreen with OSMesa (software, about 0.1 s per frame), which needs `apt-get install libosmesa6` (done by `setup_cloud.sh`). A camera follows the torso and the overlay shows the time, the speed against the command, the assist and the pushes. Options: `--perturbation` (randomization and pushes), `--heading`, `--assist` (running task), `--every`, `--width`, `--height`.
+
 ### Play trajectories
 
 ```bash

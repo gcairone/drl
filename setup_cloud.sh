@@ -19,6 +19,12 @@ fi
 
 $PIP numpy pandas matplotlib mujoco
 
+# Offscreen rendering (scripts/make_gif.py) uses OSMesa, MuJoCo's software renderer: no GPU or display needed.
+if command -v apt-get >/dev/null 2>&1; then
+  (apt-get update -qq && apt-get install -y -qq --no-install-recommends libosmesa6) >/dev/null 2>&1 \
+    || echo "warning: could not install libosmesa6, scripts/make_gif.py will not work"
+fi
+
 # Training/rollout/eval are headless and need no GL. For offscreen rendering
 # set MUJOCO_GL=egl (or osmesa) in the environment variables.
 
