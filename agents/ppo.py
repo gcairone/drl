@@ -8,7 +8,7 @@ from models.actor_critic import GaussianActor, Critic
 from models.normalizer import RunningObsNormalizer
 
 class PPOAgent(BaseAgent):
-    def __init__(self, state_dim: int, action_dim: int, lr: float = 3e-4, gamma: float = 0.99, clip_ratio: float = 0.2, update_epochs: int = 10, minibatch_size: int = 64, max_grad_norm: float = 0.5, target_kl: float = 0.01, device: str = 'cpu', obs_norm: bool = False, log_std_min: Optional[float] = None, hidden_layers: Sequence[int] = (64, 64), log_std_init: float = -0.5) -> None:
+    def __init__(self, state_dim: int, action_dim: int, lr: float = 3e-4, gamma: float = 0.99, clip_ratio: float = 0.2, update_epochs: int = 10, minibatch_size: int = 64, max_grad_norm: float = 0.5, target_kl: float = 0.01, device: str = 'cpu', obs_norm: bool = False, log_std_min: Optional[float] = None, hidden_layers: Sequence[int] = (64, 64), log_std_init: float = -0.5, adaptive_lr: bool = False, lr_min: float = 1e-5, lr_max: float = 5e-4) -> None:
         """
         Args:
             update_epochs (int): Passes over the collected batch in each update.
@@ -19,6 +19,9 @@ class PPOAgent(BaseAgent):
             log_std_min (Optional[float]): Floor of the actor's log standard deviation (None: no floor).
             hidden_layers (Sequence[int]): Sizes of the hidden layers of the actor and of the critic.
             log_std_init (float): Initial log standard deviation of the actor.
+            adaptive_lr (bool): Adapt the actor's learning rate to the KL of every minibatch (down by 1.5 above
+                                2 * target_kl, up below target_kl / 2, within [lr_min, lr_max]). The early stop on the
+                                KL is then off: every pass over the batch is done.
         """
         super().__init__(state_dim, action_dim, device)
         
@@ -28,6 +31,9 @@ class PPOAgent(BaseAgent):
         self.minibatch_size = minibatch_size
         self.max_grad_norm = max_grad_norm
         self.target_kl = target_kl
+        self.adaptive_lr = adaptive_lr
+        self.lr_min, self.lr_max = lr_min, lr_max
+        self.actor_lr = lr
         
         self.log_std_min = log_std_min
         self.hidden_layers = list(hidden_layers)
@@ -83,6 +89,16 @@ class PPOAgent(BaseAgent):
                 clip_adv = torch.clamp(ratio, 1 - self.clip_ratio, 1 + self.clip_ratio) * adv[idx]
                 loss_pi = -(torch.min(ratio * adv[idx], clip_adv)).mean()
 
+                if self.adaptive_lr:
+                    with torch.no_grad():
+                        mb_kl = ((ratio - 1.0) - torch.log(ratio)).mean().item()  # estimate of KL(old || new)
+                    if mb_kl > 2.0 * self.target_kl:
+                        self.actor_lr = max(self.actor_lr / 1.5, self.lr_min)
+                    elif mb_kl < 0.5 * self.target_kl:
+                        self.actor_lr = min(self.actor_lr * 1.5, self.lr_max)
+                    for group in self.optimizer_actor.param_groups:
+                        group['lr'] = self.actor_lr
+
                 self.optimizer_actor.zero_grad()
                 loss_pi.backward()
                 if self.max_grad_norm > 0:
@@ -112,14 +128,14 @@ class PPOAgent(BaseAgent):
                 dist = self.actor._distribution(obs)
                 approx_kl = (logp_old - dist.log_prob(act).sum(axis=-1)).mean().item()
                 entropy = dist.entropy().sum(axis=-1).mean().item()
-            if self.target_kl > 0 and approx_kl > 1.5 * self.target_kl:
+            if self.target_kl > 0 and approx_kl > 1.5 * self.target_kl and not self.adaptive_lr:
                 break
 
         # refresh observation statistics only after the update, so rollout and update used the same ones
         if self.obs_normalizer is not None:
             self.obs_normalizer.update(obs)
 
-        return {"loss_actor": float(np.mean(pi_losses)), "loss_critic": float(np.mean(v_losses)), "entropy": entropy, "kl": approx_kl, "update_epochs": epochs_done}
+        return {"loss_actor": float(np.mean(pi_losses)), "loss_critic": float(np.mean(v_losses)), "entropy": entropy, "kl": approx_kl, "update_epochs": epochs_done, "lr": self.actor_lr}
 
     def _attach_obs_normalizer(self) -> None:
         self.obs_normalizer = RunningObsNormalizer(self.state_dim).to(self.device)

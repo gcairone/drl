@@ -185,6 +185,44 @@ def test_log_std_floor() -> None:
     assert free._distribution(torch.zeros(1, 10)).stddev.log().max().item() < -2.9
 
 
+def test_adaptive_lr() -> None:
+    def make(adaptive: bool, lr: float) -> PPOAgent:
+        torch.manual_seed(0)
+        return PPOAgent(10, 4, lr=lr, minibatch_size=16, update_epochs=3, target_kl=0.01, adaptive_lr=adaptive,
+                        lr_max=max(lr, 5e-4))
+
+    n = 64
+    obs = torch.randn(n, 10)
+    adv_big, adv_zero = torch.randn(n), torch.zeros(n)
+
+    def run(agent: PPOAgent, adv: torch.Tensor) -> dict:
+        with torch.no_grad():
+            act, logp = agent.actor.sample(obs)
+
+        class FakeBuffer:
+            def get(self):
+                return dict(obs=obs, act=act, ret=torch.randn(n), adv=adv, logp=logp)
+
+        return agent.update(FakeBuffer())
+
+    # a zero advantage keeps the policy still: the KL stays below the target and the rate climbs to its ceiling
+    calm = make(True, 1e-4)
+    out = run(calm, adv_zero)
+    assert out["lr"] > 1e-4 and out["update_epochs"] == 3
+    for _ in range(10):
+        out = run(calm, adv_zero)
+    assert out["lr"] == calm.lr_max
+    # a too-large rate moves the policy far beyond the target: it is cut down, and all the passes are still done
+    hard = make(True, 3e-2)
+    for _ in range(6):
+        out = run(hard, adv_big)
+    assert out["lr"] < 3e-3 and out["update_epochs"] == 3, out
+    # without it the rate is untouched and the KL early stop is still there
+    fixed = make(False, 3e-2)
+    out = run(fixed, adv_big)
+    assert out["lr"] == 3e-2 and out["update_epochs"] < 3, out
+
+
 def main() -> None:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for test in tests:

@@ -71,7 +71,8 @@ def train(args):
         obs_norm=args.obs_norm,
         log_std_min=log_std_min if np.isfinite(log_std_min) else None,
         hidden_layers=hidden,
-        log_std_init=log_std_init
+        log_std_init=log_std_init,
+        adaptive_lr=args.adaptive_lr
     )
 
     # randomization level: adaptive curriculum, or a fixed level with --no-curriculum
@@ -97,6 +98,10 @@ def train(args):
             if 'epoch' in checkpoint:
                 start_epoch = checkpoint['epoch']
                 print(f"Resumed from epoch {start_epoch}")
+            if args.reset_log_std is not None:
+                with torch.no_grad():
+                    agent.actor.log_std.fill_(args.reset_log_std)
+                print(f"Policy std reset to {np.exp(args.reset_log_std):.3f} (log std {args.reset_log_std:.2f}).")
             if args.curriculum and 'curriculum' in checkpoint:
                 curriculum.load_state_dict(checkpoint['curriculum'])
                 print(f"Curriculum restored at difficulty {curriculum.level:.2f}.")
@@ -197,6 +202,7 @@ def train(args):
             "Entropy": metrics['entropy'],
             "KL": metrics['kl'],
             "UpdEpochs": metrics['update_epochs'],
+            "LR": metrics["lr"],
             "Eps": n_episodes,
             "Succ": success_rate,
             "Diff": difficulty,
@@ -256,6 +262,10 @@ if __name__ == "__main__":
                         help="Floor of the actor's log standard deviation (-inf: no floor; default -1.2 for stand, -1.6 for run)")
     parser.add_argument("--log_std_init", type=float, default=None,
                         help="Initial log standard deviation of the actor (default -0.5 for stand, -1.0 for run)")
+    parser.add_argument("--reset_log_std", type=float, default=None,
+                        help="After --resume, set the log standard deviation of every action dimension to this value")
+    parser.add_argument("--adaptive_lr", action=argparse.BooleanOptionalAction, default=False,
+                        help="Adapt the actor's learning rate to the KL of each minibatch (no early stop on the KL)")
     parser.add_argument("--curriculum", action=argparse.BooleanOptionalAction, default=True,
                         help="Adapt the randomization difficulty to the success rate (--no-curriculum: keep --difficulty fixed)")
     parser.add_argument("--difficulty", type=float, default=0.0,
