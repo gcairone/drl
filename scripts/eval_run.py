@@ -79,7 +79,7 @@ def main() -> None:
             raise SystemExit(f"{path} is not a running checkpoint (task: {arch.get('task', 'stand')})")
         print(f"\n=== {path}  (epoch {ckpt.get('epoch', '?')}, network {arch.get('hidden_layers')}, "
               f"{'stochastic' if args.stochastic else 'deterministic'})")
-        print(f"{'v*':>5s} {'head':>5s} {'pert':>5s} | {'survive':>7s} {'success':>7s} | {'speed':>5s} {'speed/v*':>8s} "
+        print(f"{'v*':>5s} {'head':>5s} {'pert':>5s} | {'survive':>7s} {'success':>7s} {'time[s]':>7s} | {'speed':>5s} {'speed/v*':>8s} "
               f"{'lateral':>7s} {'head err':>8s} {'tilt':>5s} | {'dist [m]':>8s} {'return':>8s}")
         for speed in args.speeds:
             for heading in args.headings:
@@ -87,7 +87,7 @@ def main() -> None:
                     r = run_command(agent, env_kwargs, speed, heading, pert, args.stochastic,
                                     args.episodes, args.max_steps, args.seed, args.assist)
                     surv = 1.0 - r["fell"].mean()
-                    print(f"{speed:5.1f} {heading:5.2f} {pert:5.2f} | {surv:7.0%} {r['success'].mean():7.0%} | "
+                    print(f"{speed:5.1f} {heading:5.2f} {pert:5.2f} | {surv:7.0%} {r['success'].mean():7.0%} {r['steps'].mean() * r['dt']:7.1f} | "
                           f"{r['speed'].mean():5.2f} {r['speed'].mean() / speed:8.2f} {r['lat'].mean():7.2f} "
                           f"{r['head_err'].mean():8.2f} {r['tilt'].mean():5.2f} | {r['dist'].mean():8.1f} {r['ret'].mean():8.0f}",
                           flush=True)
