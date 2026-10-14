@@ -5,7 +5,7 @@ from datetime import datetime
 import numpy as np
 import torch
 from envs.humanoid_env import RANDOMIZATION_DEFAULTS
-from envs.registry import DEFAULT_HIDDEN, DEFAULT_LOG_STD, TASK_PARAMS, env_class
+from envs.registry import DEFAULT_CURR_STEP, DEFAULT_HIDDEN, DEFAULT_LOG_STD, TASK_PARAMS, env_class
 from envs.vec_env import VecHumanoidEnv
 from agents.ppo import PPOAgent
 from utils.buffer import PPOBuffer
@@ -75,7 +75,8 @@ def train(args):
     )
 
     # randomization level: adaptive curriculum, or a fixed level with --no-curriculum
-    curriculum = DifficultyCurriculum(start=args.difficulty, step=args.curr_step, up=args.curr_up,
+    curriculum = DifficultyCurriculum(start=args.difficulty,
+                                      step=args.curr_step if args.curr_step is not None else DEFAULT_CURR_STEP[args.task], up=args.curr_up,
                                       down=args.curr_down, min_episodes=args.curr_min_episodes)
 
     buffer = PPOBuffer(
@@ -259,7 +260,8 @@ if __name__ == "__main__":
                         help="Adapt the randomization difficulty to the success rate (--no-curriculum: keep --difficulty fixed)")
     parser.add_argument("--difficulty", type=float, default=0.0,
                         help="Randomization level in [0, 1]: the starting level of the curriculum, or the fixed level without it")
-    parser.add_argument("--curr_step", type=float, default=0.02, help="Curriculum: level change per decision")
+    parser.add_argument("--curr_step", type=float, default=None,
+                        help="Curriculum: level change per decision (default 0.02 for stand, 0.005 for run)")
     parser.add_argument("--curr_up", type=float, default=0.7, help="Curriculum: raise the level at this success rate or above")
     parser.add_argument("--curr_down", type=float, default=0.3, help="Curriculum: lower the level below this success rate")
     parser.add_argument("--curr_min_episodes", type=int, default=20, help="Curriculum: finished episodes needed for each decision")

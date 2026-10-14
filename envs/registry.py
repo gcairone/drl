@@ -16,3 +16,6 @@ def env_class(task: str) -> Type[HumanoidEnv]:
 
 # (initial log std, floor of the log std) of the policy
 DEFAULT_LOG_STD: Dict[str, tuple] = {"stand": (-0.5, -1.2), "run": (-1.0, -1.6)}
+
+# step of the curriculum level per decision: the running task needs a slower one, its assist fades 4x faster than the level
+DEFAULT_CURR_STEP: Dict[str, float] = {"stand": 0.02, "run": 0.005}
